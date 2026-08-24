@@ -1,235 +1,196 @@
 "use client";
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useFormContext, Controller } from "react-hook-form";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { FormSection } from "./create-person";
+import { CustomerFormValues } from "../customer/customer";
 
-// ----------------------------------------------------------------------
-// Types & schema matching the EmergencyContact model
-// ----------------------------------------------------------------------
-export type OwnerType = "Person" | "Company";
+type ContactRoot = "contact" | "emergencyContact";
 
-export interface EmergencyContactFormValues {
-  ownerRef: string;
-  ownerType: OwnerType;
-  name: string;
-  relation: string;
-  phone: string;
-  isPrimary: boolean;
+interface ContactFormProps {
+  name: ContactRoot;
+  title?: string;
 }
 
-const emergencyContactFormSchema = z.object({
-  ownerRef: z.string().min(1, "Owner reference is required"),
-  ownerType: z.enum(["Person", "Company"]),
-  name: z.string().min(1, "Name is required"),
-  relation: z.string().min(1, "Relation is required"),
-  phone: z
-    .string()
-    .min(1, "Phone number is required")
-    .regex(/^9\d{9}$/, "Enter a valid Nepali phone number (e.g. 9812345678)"),
-  isPrimary: z.boolean(),
-});
-
-// ----------------------------------------------------------------------
-// Component props
-// ----------------------------------------------------------------------
-interface EmergencyContactFormProps {
-  /** ID of the owning entity (Person/Company) – passed in from parent */
-  ownerRef: string;
-  /** Type of the owning entity – passed in from parent */
-  ownerType: OwnerType;
-  /** Pre-populate the form (e.g. for editing) */
-  defaultValues?: Partial<Omit<EmergencyContactFormValues, "ownerRef" | "ownerType">>;
-  /** Called with validated form data on submit */
-  onSubmit: (data: EmergencyContactFormValues) => void | Promise<void>;
-  /** External submitting state to disable the button and show loading */
-  isSubmitting?: boolean;
-  /** Text for the submit button – defaults to "Save emergency contact" */
-  submitLabel?: string;
-  /** Cancel handler (button hidden if not provided) */
-  onCancel?: () => void;
-}
-
-// ----------------------------------------------------------------------
-// Component
-// ----------------------------------------------------------------------
-export function EmergencyContactForm({
-  ownerRef,
-  ownerType,
-  defaultValues,
-  onSubmit,
-  isSubmitting = false,
-  submitLabel = "Save emergency contact",
-  onCancel,
-}: EmergencyContactFormProps) {
+export function ContactForm({ name, title = "Contact" }: ContactFormProps) {
   const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors },
-  } = useForm<EmergencyContactFormValues>({
-    resolver: zodResolver(emergencyContactFormSchema),
-    defaultValues: {
-      ownerRef,
-      ownerType,
-      name: "",
-      relation: "",
-      phone: "",
-      isPrimary: false,
-      ...defaultValues,
-    },
-  });
+    control,
+    formState: { errors, disabled: formDisabled },
+  } = useFormContext<CustomerFormValues>();
 
-  const isPrimary = watch("isPrimary");
+  const isSubmitting = Boolean(formDisabled);
+  const sectionErrors = (errors[name] ?? {}) as Record<string, { message?: string } | undefined>;
+
+  // Whether to show the name & relation fields
+  const showNameAndRelation = name !== "contact";
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
-      <FormSection label="Emergency contact details">
-        {/* Hidden fields – necessary to pass through to the callback */}
-      <input type="hidden" {...register("ownerRef")} />
-      <input type="hidden" {...register("ownerType")} />
+    <div>
+      {/* Section title */}
+      <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        {title}
+      </h3>
 
-      {/* Name */}
-      <div className="space-y-1.5">
-        <Label
-          htmlFor="name"
-          className="text-sm font-medium text-zinc-700 dark:text-zinc-400"
-        >
-          Full name <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="name"
-          {...register("name")}
-          placeholder="Contact person's full name"
-          className={cn(
-            "rounded-none border bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500",
-            "focus-visible:border-red-500 focus-visible:ring-0",
-            "h-10 px-3 py-2 text-sm transition-colors",
-            errors.name
-              ? "border-red-500"
-              : "border-zinc-300 dark:border-zinc-700"
-          )}
-        />
-        {errors.name && (
-          <p className="text-sm text-red-600 dark:text-red-400">{errors.name.message}</p>
-        )}
-      </div>
-
-      {/* Relation */}
-      <div className="space-y-1.5">
-        <Label
-          htmlFor="relation"
-          className="text-sm font-medium text-zinc-700 dark:text-zinc-400"
-        >
-          Relation <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="relation"
-          {...register("relation")}
-          placeholder="e.g. Spouse, Sibling, Parent"
-          className={cn(
-            "rounded-none border bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500",
-            "focus-visible:border-red-500 focus-visible:ring-0",
-            "h-10 px-3 py-2 text-sm transition-colors",
-            errors.relation
-              ? "border-red-500"
-              : "border-zinc-300 dark:border-zinc-700"
-          )}
-        />
-        {errors.relation && (
-          <p className="text-sm text-red-600 dark:text-red-400">{errors.relation.message}</p>
-        )}
-      </div>
-
-      {/* Phone */}
-      <div className="space-y-1.5">
-        <Label
-          htmlFor="phone"
-          className="text-sm font-medium text-zinc-700 dark:text-zinc-400"
-        >
-          Phone number <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="phone"
-          {...register("phone")}
-          placeholder="e.g. 9812345678"
-          className={cn(
-            "rounded-none border bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500",
-            "focus-visible:border-red-500 focus-visible:ring-0",
-            "h-10 px-3 py-2 text-sm tabular-nums transition-colors",
-            errors.phone
-              ? "border-red-500"
-              : "border-zinc-300 dark:border-zinc-700"
-          )}
-        />
-        {errors.phone && (
-          <p className="text-sm text-red-600 dark:text-red-400">{errors.phone.message}</p>
-        )}
-      </div>
-
-      {/* Primary contact toggle */}
-      <div className="flex items-center justify-between py-2">
-        <Label
-          htmlFor="isPrimary"
-          className="text-sm font-medium text-zinc-700 dark:text-zinc-400 cursor-pointer"
-        >
-          Set as primary emergency contact
-        </Label>
-        <Switch
-          id="isPrimary"
-          checked={isPrimary}
-          onCheckedChange={(checked) =>
-            setValue("isPrimary", checked, { shouldValidate: true })
-          }
-          className={cn(
-            "rounded-none",
-            "border-zinc-300 dark:border-zinc-600 bg-zinc-200 dark:bg-zinc-700",
-            "data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600",
-            "h-5 w-9",
-            "[&>span]:rounded-none [&>span]:bg-white dark:[&>span]:bg-zinc-100",
-            "[&>span]:data-[state=checked]:translate-x-4"
-          )}
-        />
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-800 transition-colors">
-        {onCancel && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={isSubmitting}
-            className={cn(
-              "rounded-none border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300",
-              "hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100",
-              "focus-visible:ring-1 focus-visible:ring-red-500 focus-visible:ring-offset-0",
-              "transition-colors"
+      {/* Name & Relation – shown only for emergency contact */}
+      {showNameAndRelation && (
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor={`${name}-name`} className="text-zinc-700 dark:text-zinc-300">
+              Full name <span className="text-red-600">*</span>
+            </Label>
+            <Controller<CustomerFormValues, `${ContactRoot}.name`>
+              name={`${name}.name`}
+              control={control}
+              render={({ field: { value, onChange, onBlur, ref } }) => (
+                <Input
+                  id={`${name}-name`}
+                  placeholder="Contact person's full name"
+                  value={value ?? ""}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  ref={ref}
+                  disabled={isSubmitting}
+                  className={cn(
+                    "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
+                    "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
+                    "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
+                    sectionErrors.name && "border-red-500"
+                  )}
+                />
+              )}
+            />
+            {sectionErrors.name && (
+              <p className="text-sm text-red-600">{sectionErrors.name.message}</p>
             )}
-          >
-            Cancel
-          </Button>
-        )}
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          className={cn(
-            "rounded-none bg-red-600 text-white hover:bg-red-700",
-            "focus-visible:ring-1 focus-visible:ring-red-500 focus-visible:ring-offset-0",
-            "disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor={`${name}-relation`} className="text-zinc-700 dark:text-zinc-300">
+              Relation <span className="text-red-600">*</span>
+            </Label>
+            <Controller<CustomerFormValues, `${ContactRoot}.relation`>
+              name={`${name}.relation`}
+              control={control}
+              render={({ field: { value, onChange, onBlur, ref } }) => (
+                <Input
+                  id={`${name}-relation`}
+                  placeholder="e.g. Spouse, Sibling, Parent"
+                  value={value ?? ""}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  ref={ref}
+                  disabled={isSubmitting}
+                  className={cn(
+                    "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
+                    "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
+                    "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
+                    sectionErrors.relation && "border-red-500"
+                  )}
+                />
+              )}
+            />
+            {sectionErrors.relation && (
+              <p className="text-sm text-red-600">{sectionErrors.relation.message}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Phone & Email */}
+      <div className={cn("grid gap-6 sm:grid-cols-2", showNameAndRelation ? "mt-6" : "")}>
+        <div className="space-y-2">
+          <Label htmlFor={`${name}-phone`} className="text-zinc-700 dark:text-zinc-300">
+            Phone number <span className="text-red-600">*</span>
+          </Label>
+          <Controller<CustomerFormValues, `${ContactRoot}.phone`>
+            name={`${name}.phone`}
+            control={control}
+            render={({ field: { value, onChange, onBlur, ref } }) => (
+              <Input
+                id={`${name}-phone`}
+                placeholder="e.g. 9812345678"
+                value={value ?? ""}
+                onChange={onChange}
+                onBlur={onBlur}
+                ref={ref}
+                disabled={isSubmitting}
+                className={cn(
+                  "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm tabular-nums transition-colors placeholder:text-zinc-400",
+                  "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
+                  "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
+                  sectionErrors.phone && "border-red-500"
+                )}
+              />
+            )}
+          />
+          {sectionErrors.phone && (
+            <p className="text-sm text-red-600">{sectionErrors.phone.message}</p>
           )}
-        >
-          {isSubmitting ? "Saving…" : submitLabel}
-        </Button>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${name}-email`} className="text-zinc-700 dark:text-zinc-300">
+            Email address
+          </Label>
+          <Controller<CustomerFormValues, `${ContactRoot}.email`>
+            name={`${name}.email`}
+            control={control}
+            render={({ field: { value, onChange, onBlur, ref } }) => (
+              <Input
+                id={`${name}-email`}
+                type="email"
+                placeholder="contact@example.com"
+                value={value ?? ""}
+                onChange={onChange}
+                onBlur={onBlur}
+                ref={ref}
+                disabled={isSubmitting}
+                className={cn(
+                  "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
+                  "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
+                  "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
+                  sectionErrors.email && "border-red-500"
+                )}
+              />
+            )}
+          />
+          {sectionErrors.email && (
+            <p className="text-sm text-red-600">{sectionErrors.email.message}</p>
+          )}
+        </div>
       </div>
-      </FormSection>
-    </form>
+
+      {/* Primary toggle */}
+      <div className="mt-6 flex items-center justify-between">
+        <Label
+          htmlFor={`${name}-isPrimary`}
+          className="cursor-pointer text-zinc-700 dark:text-zinc-300"
+        >
+          Set as primary contact
+        </Label>
+        <Controller<CustomerFormValues, `${ContactRoot}.isPrimary`>
+          name={`${name}.isPrimary`}
+          control={control}
+          render={({ field: { value, onChange } }) => (
+            <Switch
+              id={`${name}-isPrimary`}
+              checked={Boolean(value)}
+              onCheckedChange={onChange}
+              disabled={isSubmitting}
+              className={cn(
+                "rounded-none",
+                "border-zinc-300 bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-700",
+                "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-600",
+                "h-5 w-9",
+                "[&>span]:rounded-none [&>span]:bg-white",
+                "[&>span]:data-[state=checked]:translate-x-4"
+              )}
+            />
+          )}
+        />
+      </div>
+    </div>
   );
 }

@@ -1,9 +1,9 @@
 import { Schema, model, models, Document, Types } from 'mongoose';
 
-export type PersonRole = 'customer' | 'vendor' | 'employee';
-export type PersonStatus = 'active' | 'inactive';
+export type IdentityRole = 'customer' | 'vendor' | 'employee';
+export type IdentityStatus = 'active' | 'inactive';
 
-export interface IPerson extends Document {
+export interface IIdentity extends Document {
   fullName: string;
   phone: string;
   email?: string;
@@ -11,16 +11,16 @@ export interface IPerson extends Document {
   dateOfBirth?: Date;
   avatarRef?: Types.ObjectId;
 
-  roles: PersonRole[];
+  roles: IdentityRole[];
 
   notes?: string;
-  status: PersonStatus;
+  status: IdentityStatus;
 
   createdAt: Date;
   updatedAt: Date;
 }
 
-const PersonSchema = new Schema<IPerson>(
+const IdentitySchema = new Schema<IIdentity>(
   {
     fullName: {
       type: String,
@@ -71,10 +71,9 @@ const PersonSchema = new Schema<IPerson>(
   { timestamps: true }
 );
 
+IdentitySchema.index({ phone: 1 }, { unique: true });
+IdentitySchema.index({ email: 1 }, { unique: true, sparse: true });
+IdentitySchema.index({ roles: 1 });
+IdentitySchema.index({ fullName: 'text' });
 
-PersonSchema.index({ phone: 1 }, { unique: true });
-PersonSchema.index({ email: 1 }, { unique: true, sparse: true });
-PersonSchema.index({ roles: 1 });
-PersonSchema.index({ fullName: 'text' });
-
-export const Person = models.Person || model<IPerson>('Person', PersonSchema);
+export const Identity = models.Identity || model<IIdentity>('Identity', IdentitySchema);

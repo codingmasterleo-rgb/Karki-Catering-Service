@@ -1,11 +1,8 @@
 "use client";
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useFormContext, Controller } from "react-hook-form";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -15,281 +12,224 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-
+import { CustomerFormValues } from "../customer/customer";
 
 export type OwnerType = "Person" | "Company";
 export type AddressLabel = "home" | "office" | "warehouse" | "other";
 
-export interface AddressFormValues {
-  ownerRef: string;
-  ownerType: OwnerType;
-  label?: AddressLabel;
-  street?: string;
-  city?: string;
-  district?: string;
-  country?: string;
-  isPrimary: boolean;
-}
-
-
-
-const addressFormSchema = z.object({
-  ownerRef: z.string().min(1, "Owner reference is required"),
-  ownerType: z.enum(["Person", "Company"]),
-  label: z
-    .enum(["home", "office", "warehouse", "other"])
-    .optional()
-    .default("office"),
-  street: z.string().optional(),
-  city: z.string().optional(),
-  district: z.string().optional(),
-  country: z.string().optional(),
-  isPrimary: z.boolean(),
-});
-
+type AddressRoot = "permanentAddress" | "temporaryAddress";
 
 interface AddressFormProps {
-  ownerRef: string;
-  ownerType: OwnerType;
-  defaultValues?: Partial<Omit<AddressFormValues, "ownerRef" | "ownerType">>;
-  onSubmit: (data: AddressFormValues) => void | Promise<void>;
-  isSubmitting?: boolean;
-  submitLabel?: string;
-  onCancel?: () => void;
+  name: AddressRoot;
+  title?: string;
 }
 
-
-export function AddressForm({
-  ownerRef,
-  ownerType,
-  defaultValues,
-  onSubmit,
-  isSubmitting = false,
-  submitLabel = "Save address",
-  onCancel,
-}: AddressFormProps) {
+export function AddressForm({ name, title = "Address" }: AddressFormProps) {
   const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors },
-  } = useForm<AddressFormValues>({
-    resolver: zodResolver(addressFormSchema),
-    defaultValues: {
-      ownerRef,
-      ownerType,
-      label: "office",
-      street: "",
-      city: "",
-      district: "",
-      country: "",
-      isPrimary: false,
-      ...defaultValues,
-    },
-  });
+    control,
+    formState: { errors, disabled: formDisabled },
+  } = useFormContext<CustomerFormValues>();
 
-  // Watch switch value for the Primary toggle
-  const isPrimary = watch("isPrimary");
+  const isSubmitting = Boolean(formDisabled);
+  const sectionErrors = (errors[name] ?? {}) as Record<string, { message?: string } | undefined>;
 
   return (
-    <form
-      onSubmit={handleSubmit(onSubmit)}
-      className="space-y-6"
-      noValidate
-    >
-      {/* Hidden fields – passed through to the callback */}
-      <input type="hidden" {...register("ownerRef")} />
-      <input type="hidden" {...register("ownerType")} />
+    <div>
+      {/* Section title */}
+      <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        {title}
+      </h3>
 
-      {/* Label */}
-      <div className="space-y-1.5">
-        <Label
-          htmlFor="label"
-          className="text-zinc-800 dark:text-zinc-200 text-sm font-medium"
-        >
-          Label
-        </Label>
-        <Select
-          defaultValue={defaultValues?.label ?? "office"}
-          onValueChange={(value) =>
-            setValue("label", value as AddressLabel, { shouldValidate: true })
-          }
-        >
-          <SelectTrigger
-            id="label"
-            className={cn(
-            "rounded-none border-zinc-700 capitalize w-full bg-zinc-900 text-zinc-100 placeholder:text-zinc-500",
-            "focus-visible:border-red-500 focus-visible:ring-0",
-            "h-10 px-3 py-2 text-sm",
-            errors.label && "border-red-500"
-          )}
-          >
-            <SelectValue placeholder="Select label" />
-          </SelectTrigger>
-          <SelectContent className="rounded-none border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-950 dark:text-zinc-50">
-            <SelectItem value="home">Home</SelectItem>
-            <SelectItem value="office">Office</SelectItem>
-            <SelectItem value="warehouse">Warehouse</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
-        {errors.label && (
-          <p className="text-red-400 text-sm">{errors.label.message}</p>
-        )}
-      </div>
-
-      {/* Street */}
-      <div className="space-y-1.5">
-        <Label
-          htmlFor="street"
-          className="text-zinc-800 dark:text-zinc-200 text-sm font-medium"
-        >
-          Street
-        </Label>
-        <Input
-          id="street"
-          {...register("street")}
-          placeholder="Enter street address"
-          className={cn(
-            "rounded-none border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500",
-            "focus-visible:border-red-500 focus-visible:ring-0",
-            "h-10 px-3 py-2 text-sm",
-            errors.street && "border-red-500"
-          )}
-        />
-        {errors.street && (
-          <p className="text-red-400 text-sm">{errors.street.message}</p>
-        )}
-      </div>
-
-      {/* City & District – side by side on larger screens */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="city"
-            className="text-zinc-800 dark:text-zinc-200 text-sm font-medium"
-          >
-            City
+      {/* Label & Street */}
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`${name}-label`} className="text-zinc-700 dark:text-zinc-300">
+            Label
           </Label>
-          <Input
-            id="city"
-            {...register("city")}
-            placeholder="City"
-             className={cn(
-            "rounded-none border-zinc-700 capitalize w-full bg-zinc-900 text-zinc-100 placeholder:text-zinc-500",
-            "focus-visible:border-red-500 focus-visible:ring-0",
-            "h-10 px-3 py-2 text-sm",
-            errors.city && "border-red-500"
-          )}
+          <Controller<CustomerFormValues, `${AddressRoot}.label`>
+            name={`${name}.label`}
+            control={control}
+            render={({ field: { value, onChange } }) => (
+              <Select onValueChange={onChange} value={value ?? "office"} disabled={isSubmitting}>
+                <SelectTrigger
+                  id={`${name}-label`}
+                  className={cn(
+                    "w-full rounded-none border-zinc-300 bg-white px-4 py-3 text-sm capitalize transition-colors",
+                    "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
+                    "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100",
+                    sectionErrors.label && "border-red-500"
+                  )}
+                >
+                  <SelectValue placeholder="Select label" />
+                </SelectTrigger>
+                <SelectContent className="rounded-none border-zinc-200 dark:border-zinc-700">
+                  <SelectItem value="home">Home</SelectItem>
+                  <SelectItem value="office">Office</SelectItem>
+                  <SelectItem value="warehouse">Warehouse</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           />
-          {errors.city && (
-            <p className="text-red-400 text-sm">{errors.city.message}</p>
+          {sectionErrors.label && (
+            <p className="text-sm text-red-600">{sectionErrors.label.message}</p>
           )}
         </div>
 
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="district"
-            className="text-zinc-800 dark:text-zinc-200 text-sm font-medium"
-          >
+        <div className="space-y-2">
+          <Label htmlFor={`${name}-street`} className="text-zinc-700 dark:text-zinc-300">
+            Street
+          </Label>
+          <Controller<CustomerFormValues, `${AddressRoot}.street`>
+            name={`${name}.street`}
+            control={control}
+            render={({ field: { value, onChange, onBlur, ref } }) => (
+              <Input
+                id={`${name}-street`}
+                placeholder="Enter street address"
+                value={value ?? ""}
+                onChange={onChange}
+                onBlur={onBlur}
+                ref={ref}
+                disabled={isSubmitting}
+                className={cn(
+                  "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
+                  "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
+                  "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
+                  sectionErrors.street && "border-red-500"
+                )}
+              />
+            )}
+          />
+          {sectionErrors.street && (
+            <p className="text-sm text-red-600">{sectionErrors.street.message}</p>
+          )}
+        </div>
+      </div>
+
+      {/* City & District */}
+      <div className="mt-6 grid gap-6 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`${name}-city`} className="text-zinc-700 dark:text-zinc-300">
+            City
+          </Label>
+          <Controller<CustomerFormValues, `${AddressRoot}.city`>
+            name={`${name}.city`}
+            control={control}
+            render={({ field: { value, onChange, onBlur, ref } }) => (
+              <Input
+                id={`${name}-city`}
+                placeholder="City"
+                value={value ?? ""}
+                onChange={onChange}
+                onBlur={onBlur}
+                ref={ref}
+                disabled={isSubmitting}
+                className={cn(
+                  "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm capitalize transition-colors placeholder:text-zinc-400",
+                  "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
+                  "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
+                  sectionErrors.city && "border-red-500"
+                )}
+              />
+            )}
+          />
+          {sectionErrors.city && (
+            <p className="text-sm text-red-600">{sectionErrors.city.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${name}-district`} className="text-zinc-700 dark:text-zinc-300">
             District
           </Label>
-          <Input
-            id="district"
-            {...register("district")}
-            placeholder="District"
-             className={cn(
-            "rounded-none border-zinc-700 capitalize w-full bg-zinc-900 text-zinc-100 placeholder:text-zinc-500",
-            "focus-visible:border-red-500 focus-visible:ring-0",
-            "h-10 px-3 py-2 text-sm",
-            errors.district && "border-red-500"
-          )}
+          <Controller<CustomerFormValues, `${AddressRoot}.district`>
+            name={`${name}.district`}
+            control={control}
+            render={({ field: { value, onChange, onBlur, ref } }) => (
+              <Input
+                id={`${name}-district`}
+                placeholder="District"
+                value={value ?? ""}
+                onChange={onChange}
+                onBlur={onBlur}
+                ref={ref}
+                disabled={isSubmitting}
+                className={cn(
+                  "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm capitalize transition-colors placeholder:text-zinc-400",
+                  "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
+                  "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
+                  sectionErrors.district && "border-red-500"
+                )}
+              />
+            )}
           />
-          {errors.district && (
-            <p className="text-red-400 text-sm">{errors.district.message}</p>
+          {sectionErrors.district && (
+            <p className="text-sm text-red-600">{sectionErrors.district.message}</p>
           )}
         </div>
       </div>
 
       {/* Country */}
-      <div className="space-y-1.5">
-        <Label
-          htmlFor="country"
-          className="text-zinc-800 dark:text-zinc-200 text-sm font-medium"
-        >
+      <div className="mt-6 space-y-2">
+        <Label htmlFor={`${name}-country`} className="text-zinc-700 dark:text-zinc-300">
           Country
         </Label>
-        <Input
-          id="country"
-          {...register("country")}
-          placeholder="Country"
-           className={cn(
-            "rounded-none border-zinc-700 capitalize w-full bg-zinc-900 text-zinc-100 placeholder:text-zinc-500",
-            "focus-visible:border-red-500 focus-visible:ring-0",
-            "h-10 px-3 py-2 text-sm",
-            errors.country && "border-red-500"
+        <Controller<CustomerFormValues, `${AddressRoot}.country`>
+          name={`${name}.country`}
+          control={control}
+          render={({ field: { value, onChange, onBlur, ref } }) => (
+            <Input
+              id={`${name}-country`}
+              placeholder="Country"
+              value={value ?? ""}
+              onChange={onChange}
+              onBlur={onBlur}
+              ref={ref}
+              disabled={isSubmitting}
+              className={cn(
+                "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm capitalize transition-colors placeholder:text-zinc-400",
+                "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
+                "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
+                sectionErrors.country && "border-red-500"
+              )}
+            />
           )}
         />
-        {errors.country && (
-          <p className="text-red-400 text-sm">{errors.country.message}</p>
+        {sectionErrors.country && (
+          <p className="text-sm text-red-600">{sectionErrors.country.message}</p>
         )}
       </div>
 
-      {/* Primary address toggle */}
-      <div className="flex items-center justify-between py-2">
+      {/* Primary toggle */}
+      <div className="mt-6 flex items-center justify-between">
         <Label
-          htmlFor="isPrimary"
-          className="text-zinc-800 dark:text-zinc-200 text-sm font-medium cursor-pointer"
+          htmlFor={`${name}-isPrimary`}
+          className="cursor-pointer text-zinc-700 dark:text-zinc-300"
         >
           Set as primary address
         </Label>
-        <Switch
-          id="isPrimary"
-          checked={isPrimary}
-          onCheckedChange={(checked) =>
-            setValue("isPrimary", checked, { shouldValidate: true })
-          }
-          className={cn(
-            "rounded-none", // track
-            "border-zinc-600 bg-zinc-700",
-            "data-[state=checked]:bg-red-600",
-            "h-5 w-9",
-            // thumb
-            "[&>span]:rounded-none [&>span]:bg-white",
-            "[&>span]:data-[state=checked]:translate-x-4"
+        <Controller<CustomerFormValues, `${AddressRoot}.isPrimary`>
+          name={`${name}.isPrimary`}
+          control={control}
+          render={({ field: { value, onChange } }) => (
+            <Switch
+              id={`${name}-isPrimary`}
+              checked={Boolean(value)}
+              onCheckedChange={onChange}
+              disabled={isSubmitting}
+              className={cn(
+                "rounded-none",
+                "border-zinc-300 bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-700",
+                "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-600",
+                "h-5 w-9",
+                "[&>span]:rounded-none [&>span]:bg-white",
+                "[&>span]:data-[state=checked]:translate-x-4"
+              )}
+            />
           )}
         />
       </div>
-
-      {/* Actions */}
-      <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
-        {onCancel && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={isSubmitting}
-            className={cn(
-              "rounded-none border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-950 dark:text-zinc-50",
-              "focus-visible:ring-1 focus-visible:ring-red-500 focus-visible:ring-offset-0"
-            )}
-          >
-            Cancel
-          </Button>
-        )}
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          className={cn(
-            "rounded-none bg-red-600 text-white hover:bg-red-700",
-            "focus-visible:ring-1 focus-visible:ring-red-500 focus-visible:ring-offset-0",
-            "disabled:opacity-50 disabled:cursor-not-allowed"
-          )}
-        >
-          {isSubmitting ? "Saving…" : submitLabel}
-        </Button>
-      </div>
-    </form>
+    </div>
   );
 }
