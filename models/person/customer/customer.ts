@@ -6,7 +6,7 @@ export type CustomerStatus = 'active' | 'inactive' | 'blacklisted';
 
 export interface ICustomer extends Document {
     identity: Types.ObjectId;
-    customerCode: string; // e.g. "CUST-0042"
+    customerCode: string;
     displayName: string;
     permanentAddress?: Types.ObjectId;
     temporaryAddress?: Types.ObjectId;

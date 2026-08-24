@@ -1,12 +1,6 @@
 "use client";
-
 import { useCallback, useMemo, useState, useRef, type KeyboardEvent } from "react";
-import { contactFormSchema, emergencyContactFormSchema } from "@/zod/person/contact";
-import { customerDefaultsFormSchema } from "@/zod/person/customer/customer_defaults";
-import { DocumentFormSchema } from "@/zod/person/documents";
-import { identitySchema } from "@/zod/person/identity";
-import { socialMediaAccountFormSchema } from "@/zod/person/social_accounts";
-import { Controller, FormProvider, useForm, Resolver } from "react-hook-form"; // ✅ added Resolver
+import { Controller, FormProvider, useForm, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import z from "zod";
 import {
@@ -28,29 +22,12 @@ import { ContactForm } from "../person/contact";
 import { SocialProfileForm } from "../person/social_accounts";
 import { DocumentForm } from "../person/document";
 import { toast } from "sonner";
-import { addressFormSchema } from "@/zod/person/address";
+import { customerFormSchema } from "@/zod/person/customer/customer";
 
-// ---------- Schema ----------
-const customerFormSchema = z.object({
-  identity: identitySchema,
-  customerCode: z.string()
-    .min(6, "Customer Code Can't Be Less Than 6 Character")
-    .max(20, "Customer Code Can't Be More Than 20 Character"),
-  displayName: z.string()
-    .min(3, "Customer Code Can't Be Less Than 3 Character")
-    .max(42, "Customer Code Can't Be More Than 42 Character"),
-  permanentAddress: addressFormSchema,
-  temporaryAddress: addressFormSchema,
-  contact: contactFormSchema,
-  emergencyContact: emergencyContactFormSchema,
-  documents: DocumentFormSchema,
-  socialMediaProfiles: socialMediaAccountFormSchema,
-  defaults: customerDefaultsFormSchema,
-});
+
 
 export type CustomerFormValues = z.infer<typeof customerFormSchema>;
 
-// ---------- Initial data ----------
 const initial_data: CustomerFormValues = {
   identity: {
     fullName: "",
@@ -78,24 +55,28 @@ const initial_data: CustomerFormValues = {
     tdsApplicable: false,
   },
   displayName: "",
-  documents: {
-    documentNumber: "",
-    documentType: "citizenship",
-    mediaRefs: [],
-    description: "",
-    expiryDate: undefined,
-    issuedBy: "",
-    issuedDate: undefined,
-    issuedDistrict: "",
-    title: "",
-  },
-  emergencyContact: {
-    isPrimary: true,
-    name: "",
-    phone: "",
-    relation: "",
-    email: "",
-  },
+  documents: [
+    {
+      documentNumber: "",
+      documentType: "citizenship",
+      mediaRefs: [],
+      description: "",
+      expiryDate: undefined,
+      issuedBy: "",
+      issuedDate: undefined,
+      issuedDistrict: "",
+      title: "",
+    }
+  ],
+  emergencyContact: [
+    {
+      isPrimary: true,
+      name: "",
+      phone: "",
+      relation: "",
+      email: "",
+    }
+  ],
   permanentAddress: {
     isPrimary: true,
     label: "home",
@@ -157,7 +138,7 @@ export default function CustomerForm() {
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const methods = useForm<CustomerFormValues>({
-    resolver: zodResolver(customerFormSchema) as Resolver<CustomerFormValues>, // ✅ cast here
+    resolver: zodResolver(customerFormSchema) as Resolver<CustomerFormValues>,
     defaultValues: initial_data,
     mode: "onBlur",
   });
@@ -209,10 +190,10 @@ export default function CustomerForm() {
     [goToTab]
   );
 
-  // ---------- API Submission ----------
+  
   const onSubmit = async (data: CustomerFormValues) => {
     try {
-        console.log(data)
+      console.log(data)
       const response = await fetch("/api/customers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
