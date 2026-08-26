@@ -1,6 +1,8 @@
 "use client";
-import { useCallback, useMemo, useState, useRef, type KeyboardEvent } from "react";
-import { Controller, FormProvider, useForm, Resolver } from "react-hook-form";
+
+import * as React from "react";
+import { useCallback, useMemo, useState, useRef, useEffect, type KeyboardEvent } from "react";
+import { Controller, useFieldArray, useForm, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import z from "zod";
 import {
@@ -11,20 +13,29 @@ import {
   FileText,
   Share2,
   Loader2,
+  Plus,
+  Trash2,
+  AlertCircle,
+  PhoneCall,
+  FileCheck,
+  UtensilsCrossed,
+  RotateCcw,
+  CheckCircle2,
 } from "lucide-react";
+import { toast } from "sonner";
+
 import { cn } from "@/lib/utils";
+import { Label } from "../ui/label";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+
 import { IdentityForm } from "../person/identity";
 import { DefaultsForm } from "./defaults";
 import { AddressForm } from "../person/address";
-import { Label } from "../ui/label";
-import { Input } from "../ui/input";
 import { ContactForm } from "../person/contact";
 import { SocialProfileForm } from "../person/social_accounts";
 import { DocumentForm } from "../person/document";
-import { toast } from "sonner";
 import { customerFormSchema } from "@/zod/person/customer/customer";
-
-
 
 export type CustomerFormValues = z.infer<typeof customerFormSchema>;
 
@@ -66,20 +77,20 @@ const initial_data: CustomerFormValues = {
       issuedDate: undefined,
       issuedDistrict: "",
       title: "",
-    }
+    },
   ],
   emergencyContact: [
     {
-      isPrimary: true,
+      isPrimary: false,
       name: "",
       phone: "",
       relation: "",
       email: "",
-    }
+    },
   ],
   permanentAddress: {
     isPrimary: true,
-    label: "home",
+    label: "office",
     city: "",
     country: "",
     district: "",
@@ -95,8 +106,8 @@ const initial_data: CustomerFormValues = {
     whatsapp: "",
   },
   temporaryAddress: {
-    isPrimary: true,
-    label: "home",
+    isPrimary: false,
+    label: "other",
     city: "",
     country: "",
     district: "",
@@ -104,7 +115,6 @@ const initial_data: CustomerFormValues = {
   },
 };
 
-// ---------- Tabs ----------
 export enum CustomerTab {
   Identity = "identity",
   Defaults = "defaults",
@@ -114,13 +124,19 @@ export enum CustomerTab {
   SocialProfile = "social_profile",
 }
 
-const tabList: { key: CustomerTab; label: string; icon: React.ElementType }[] = [
-  { key: CustomerTab.Identity, label: "Identity", icon: UserRound },
-  { key: CustomerTab.Defaults, label: "Defaults", icon: Settings2 },
-  { key: CustomerTab.Address, label: "Address", icon: MapPin },
-  { key: CustomerTab.Contacts, label: "Contacts", icon: Contact },
-  { key: CustomerTab.Document, label: "Document", icon: FileText },
-  { key: CustomerTab.SocialProfile, label: "Social Profile", icon: Share2 },
+interface TabConfig {
+  key: CustomerTab;
+  label: string;
+  icon: React.ElementType;
+}
+
+const tabList: TabConfig[] = [
+  { key: CustomerTab.Identity, label: "Identity & Roles", icon: UserRound },
+  { key: CustomerTab.Defaults, label: "Commercial Terms", icon: Settings2 },
+  { key: CustomerTab.Address, label: "Addresses & Venues", icon: MapPin },
+  { key: CustomerTab.Contacts, label: "Event Contacts", icon: Contact },
+  { key: CustomerTab.Document, label: "KYC & Documents", icon: FileText },
+  { key: CustomerTab.SocialProfile, label: "Communication", icon: Share2 },
 ];
 
 const tabFieldMap: Record<CustomerTab, (keyof CustomerFormValues)[]> = {
@@ -132,25 +148,45 @@ const tabFieldMap: Record<CustomerTab, (keyof CustomerFormValues)[]> = {
   [CustomerTab.SocialProfile]: ["socialMediaProfiles"],
 };
 
-// ---------- Main Component ----------
 export default function CustomerForm() {
   const [openedTab, setOpenedTab] = useState<CustomerTab>(CustomerTab.Identity);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
-  const methods = useForm<CustomerFormValues>({
+  const {
+    control,
+    handleSubmit,
+    trigger,
+    watch,
+    formState: { errors, isSubmitting },
+    reset,
+  } = useForm<CustomerFormValues>({
     resolver: zodResolver(customerFormSchema) as Resolver<CustomerFormValues>,
     defaultValues: initial_data,
     mode: "onBlur",
   });
 
-  const {
-    handleSubmit,
-    trigger,
-    control,
-    formState: { errors, isSubmitting },
-    reset,
-  } = methods;
+  const formValues = watch();
 
+  // Dynamic Array Handlers
+  const {
+    fields: documentFields,
+    append: appendDocument,
+    remove: removeDocument,
+  } = useFieldArray({
+    control,
+    name: "documents",
+  });
+
+  const {
+    fields: emergencyFields,
+    append: appendEmergencyContact,
+    remove: removeEmergencyContact,
+  } = useFieldArray({
+    control,
+    name: "emergencyContact",
+  });
+
+  // Calculate live tab error states
   const tabErrorMap = useMemo(() => {
     const map: Record<CustomerTab, boolean> = {} as Record<CustomerTab, boolean>;
     for (const tab of Object.values(CustomerTab)) {
@@ -159,13 +195,17 @@ export default function CustomerForm() {
     return map;
   }, [errors]);
 
+  const totalErrors = useMemo(() => {
+    return Object.keys(errors).length;
+  }, [errors]);
+
   const goToTab = useCallback(
     async (tab: CustomerTab) => {
       if (tab === openedTab) return;
       await trigger(tabFieldMap[openedTab]);
       setOpenedTab(tab);
     },
-    [openedTab, trigger]
+    [openedTab, trigger],
   );
 
   const handleTabKeyDown = useCallback(
@@ -187,13 +227,23 @@ export default function CustomerForm() {
         tabRefs.current[nextTab]?.focus();
       }
     },
-    [goToTab]
+    [goToTab],
   );
 
-  
+  // Keyboard shortcut Ctrl+S / Cmd+S support
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        handleSubmit(onSubmit, onInvalid)();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
+
   const onSubmit = async (data: CustomerFormValues) => {
     try {
-      console.log(data)
       const response = await fetch("/api/customers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -202,46 +252,92 @@ export default function CustomerForm() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to create customer");
+        throw new Error(errorData.message || "Failed to register catering customer");
       }
 
-      const result = await response.json();
-      toast.success("Customer created successfully!");
+      toast.success("Catering client account registered successfully!");
       reset(initial_data);
+      setOpenedTab(CustomerTab.Identity);
     } catch (error) {
       console.error("Submit error:", error);
-      toast.error(error instanceof Error ? error.message : "An error occurred");
+      toast.error(error instanceof Error ? error.message : "Submission failed");
     }
   };
 
   const onInvalid = () => {
     const firstErroredTab = tabList.find((t) => tabErrorMap[t.key]);
     if (firstErroredTab) setOpenedTab(firstErroredTab.key);
-    toast.error("Please fix all errors before submitting.");
+    toast.error("Please resolve the flagged errors before submitting.");
   };
 
   return (
-    <FormProvider {...methods}>
-      <form
-        onSubmit={handleSubmit(onSubmit, onInvalid)}
-        className="flex min-h-dvh flex-col bg-zinc-50 dark:bg-zinc-950"
-      >
-        {/* Sticky header */}
-        <header className="sticky top-0 z-20 border-b-2 border-zinc-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-zinc-800 dark:bg-zinc-900/95 dark:supports-[backdrop-filter]:bg-zinc-900/80">
-          <div className="mx-auto max-w-7xl px-4 py-3 sm:px-5 sm:py-4 lg:px-6">
-            <h1 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-xl">
-              New Customer
-            </h1>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400 sm:text-sm">
-              Fill out each section below. Fields with errors are flagged on their tab.
-            </p>
+    <form
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      noValidate
+      className="flex min-h-screen w-full flex-col bg-zinc-50 font-sans text-zinc-900 transition-colors selection:bg-red-600 selection:text-white dark:bg-zinc-950 dark:text-zinc-100"
+    >
+      {/* 1. TOP ERP COMMAND BAR */}
+      <header className="sticky top-0 z-30 border-b-2 border-zinc-200 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/90">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-none border border-red-600 bg-red-600 text-white shadow-sm">
+              <UtensilsCrossed className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                <span>CATERING ERP</span>
+                <span>/</span>
+                <span className="text-zinc-800 dark:text-zinc-200">
+                  {formValues.customerCode?.trim() || "NEW-ACCOUNT"}
+                </span>
+              </div>
+              <h1 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-lg">
+                {formValues.displayName?.trim() || "New Catering Client Account"}
+              </h1>
+            </div>
           </div>
 
-          <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
+          <div className="flex items-center gap-2.5">
+            {totalErrors > 0 && (
+              <div className="hidden items-center gap-1.5 border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700 dark:border-red-900/80 dark:bg-red-950/60 dark:text-red-400 sm:flex">
+                <AlertCircle className="h-3.5 w-3.5" />
+                <span>{totalErrors} {totalErrors === 1 ? "Error" : "Errors"}</span>
+              </div>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => reset(initial_data)}
+              disabled={isSubmitting}
+              className="h-9 items-center gap-1.5 rounded-none border-2 border-zinc-300 bg-white px-3 text-xs font-bold text-zinc-700 transition-all hover:border-zinc-400 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Reset</span>
+            </Button>
+
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="h-9 items-center gap-2 rounded-none border border-red-600 bg-red-600 px-4 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition-all hover:bg-red-700 active:scale-98 disabled:pointer-events-none disabled:opacity-50 dark:border-red-500"
+            >
+              {isSubmitting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              <span>{isSubmitting ? "Saving..." : "Save Client"}</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* 2. HORIZONTAL NAVIGATION BAR */}
+        <div className="border-t border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <nav
               role="tablist"
-              aria-label="Customer form sections"
-              className="scrollbar-none -mx-4 flex gap-1 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 sm:pt-2 lg:grid-cols-6"
+              aria-label="Catering Account Tabs"
+              className="no-scrollbar -mb-px flex space-x-1 overflow-x-auto"
             >
               {tabList.map(({ key, label, icon: Icon }, index) => {
                 const isActive = openedTab === key;
@@ -258,166 +354,469 @@ export default function CustomerForm() {
                     id={`tab-${key}`}
                     aria-selected={isActive}
                     aria-controls={`panel-${key}`}
-                    aria-current={isActive ? "true" : undefined}
                     tabIndex={isActive ? 0 : -1}
                     onClick={() => goToTab(key)}
                     onKeyDown={(e) => handleTabKeyDown(e, index)}
                     className={cn(
-                      "flex shrink-0 items-center justify-center gap-2 border-2 px-3 py-2.5 text-sm font-semibold whitespace-nowrap transition-colors sm:justify-start sm:px-4",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900",
+                      "flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-xs font-bold whitespace-nowrap transition-all",
                       isActive
-                        ? "border-red-600 bg-red-600 text-white"
-                        : "border-transparent text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
+                        ? "border-red-600 bg-white text-red-600 dark:bg-zinc-950 dark:text-red-500"
+                        : "border-transparent text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:text-zinc-200",
                     )}
                   >
                     <Icon
                       className={cn(
-                        "h-4 w-4 shrink-0",
+                        "h-4 w-4",
                         isActive
-                          ? "text-white"
-                          : "text-zinc-400 dark:text-zinc-500"
+                          ? "text-red-600 dark:text-red-500"
+                          : "text-zinc-400 dark:text-zinc-500",
                       )}
                     />
                     <span>{label}</span>
+
                     {hasError && (
-                      <span
-                        className={cn(
-                          "h-1.5 w-1.5 shrink-0",
-                          isActive ? "bg-white" : "bg-red-600"
-                        )}
-                      />
+                      <span className="h-1.5 w-1.5 rounded-none bg-red-600 dark:bg-red-500" />
                     )}
                   </button>
                 );
               })}
             </nav>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* Panels */}
-        <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-5 sm:py-5 lg:px-6 lg:py-6">
-          <div
-            role="tabpanel"
-            id={`panel-${openedTab}`}
-            aria-labelledby={`tab-${openedTab}`}
-          >
-            {openedTab === CustomerTab.Identity && (
-              <div className="space-y-8">
-                <div className="grid gap-6 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="customerCode" className="text-zinc-700 dark:text-zinc-300">
-                      Customer code <span className="text-red-600">*</span>
-                    </Label>
-                    <Controller<CustomerFormValues, "customerCode">
-                      name="customerCode"
-                      control={control}
-                      render={({ field: { value, onChange, onBlur, ref } }) => (
-                        <Input
-                          id="customerCode"
-                          placeholder="e.g. CUST0001"
-                          value={value ?? ""}
-                          onChange={onChange}
-                          onBlur={onBlur}
-                          ref={ref}
-                          disabled={isSubmitting}
-                          className={cn(
-                            "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                            "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                            "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                            errors.customerCode && "border-red-500"
-                          )}
-                        />
-                      )}
-                    />
-                    {errors.customerCode && (
-                      <p className="text-sm text-red-600">{errors.customerCode.message}</p>
-                    )}
-                  </div>
+      {/* 3. CENTER FORM CANVAS */}
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">
+        <div
+          role="tabpanel"
+          id={`panel-${openedTab}`}
+          aria-labelledby={`tab-${openedTab}`}
+          className="border-2 border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-8"
+        >
+          {/* TAB 1: IDENTITY */}
+          {openedTab === CustomerTab.Identity && (
+            <div className="space-y-8">
+              <div className="border-b border-zinc-200 pb-4 dark:border-zinc-800">
+                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  Client Core Identification
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Primary credentials, account reference ID, and corporate ERP permissions.
+                </p>
+              </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="displayName" className="text-zinc-700 dark:text-zinc-300">
-                      Display name <span className="text-red-600">*</span>
-                    </Label>
-                    <Controller<CustomerFormValues, "displayName">
-                      name="displayName"
-                      control={control}
-                      render={({ field: { value, onChange, onBlur, ref } }) => (
-                        <Input
-                          id="displayName"
-                          placeholder="e.g. Sujan Karki"
-                          value={value ?? ""}
-                          onChange={onChange}
-                          onBlur={onBlur}
-                          ref={ref}
-                          disabled={isSubmitting}
-                          className={cn(
-                            "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                            "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                            "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                            errors.displayName && "border-red-500"
-                          )}
-                        />
-                      )}
-                    />
-                    {errors.displayName && (
-                      <p className="text-sm text-red-600">{errors.displayName.message}</p>
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="customerCode"
+                    className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+                  >
+                    Client / Account ID <span className="text-red-600 dark:text-red-500">*</span>
+                  </Label>
+                  <Controller
+                    name="customerCode"
+                    control={control}
+                    render={({ field: { value, onChange, onBlur, ref } }) => (
+                      <Input
+                        id="customerCode"
+                        placeholder="e.g. CAT-2026-0089"
+                        value={value ?? ""}
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        ref={ref}
+                        disabled={isSubmitting}
+                        aria-invalid={Boolean(errors.customerCode)}
+                        className={cn(
+                          "h-11 rounded-none border-zinc-300 bg-white px-3.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+                          errors.customerCode && "border-red-500",
+                        )}
+                      />
                     )}
-                  </div>
+                  />
+                  {errors.customerCode && (
+                    <p className="text-xs text-red-600 dark:text-red-500">
+                      {errors.customerCode.message}
+                    </p>
+                  )}
                 </div>
 
-                <IdentityForm />
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="displayName"
+                    className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+                  >
+                    Display Name / Organization <span className="text-red-600 dark:text-red-500">*</span>
+                  </Label>
+                  <Controller
+                    name="displayName"
+                    control={control}
+                    render={({ field: { value, onChange, onBlur, ref } }) => (
+                      <Input
+                        id="displayName"
+                        placeholder="e.g. Grand Horizon Banquets & Events"
+                        value={value ?? ""}
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        ref={ref}
+                        disabled={isSubmitting}
+                        aria-invalid={Boolean(errors.displayName)}
+                        className={cn(
+                          "h-11 rounded-none border-zinc-300 bg-white px-3.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+                          errors.displayName && "border-red-500",
+                        )}
+                      />
+                    )}
+                  />
+                  {errors.displayName && (
+                    <p className="text-xs text-red-600 dark:text-red-500">
+                      {errors.displayName.message}
+                    </p>
+                  )}
+                </div>
               </div>
-            )}
-            {openedTab === CustomerTab.Defaults && <DefaultsForm />}
-            {openedTab === CustomerTab.SocialProfile && <SocialProfileForm />}
-            {openedTab === CustomerTab.Document && <DocumentForm />}
-            {openedTab === CustomerTab.Address && (
-              <div className="flex flex-col space-y-6">
-                <AddressForm name="permanentAddress" title="Permanent Address" />
-                <AddressForm name="temporaryAddress" title="Temporary Address" />
-              </div>
-            )}
-            {openedTab === CustomerTab.Contacts && (
-              <div className="flex flex-col space-y-6">
-                <ContactForm name="contact" title="Personal Contact" />
-                <ContactForm name="emergencyContact" title="Emergency Contact" />
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Sticky footer */}
-        <footer className="sticky bottom-0 z-20 border-t-2 border-zinc-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-zinc-800 dark:bg-zinc-900/95 dark:supports-[backdrop-filter]:bg-zinc-900/80">
-          <div className="mx-auto flex max-w-7xl flex-col-reverse gap-3 px-4 py-3 sm:flex-row sm:justify-end sm:px-5 sm:py-4 lg:px-6">
-            <button
-              type="button"
-              onClick={() => reset(initial_data)}
-              disabled={isSubmitting}
-              className={cn(
-                "w-full border-2 border-zinc-300 bg-transparent px-6 py-2.5 font-semibold text-zinc-700 transition-colors sm:w-auto",
-                "hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900",
-                "disabled:cursor-not-allowed disabled:opacity-60"
-              )}
-            >
-              Reset
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={cn(
-                "flex w-full items-center justify-center gap-2 border-2 border-red-600 bg-red-600 px-6 py-2.5 font-semibold text-white transition-colors sm:w-auto",
-                "hover:bg-red-700 hover:border-red-700",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900",
-                "disabled:cursor-not-allowed disabled:opacity-60"
-              )}
-            >
-              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isSubmitting ? "Saving..." : "Save Customer"}
-            </button>
-          </div>
-        </footer>
-      </form>
-    </FormProvider>
+              <hr className="border-zinc-200 dark:border-zinc-800" />
+
+              <Controller
+                name="identity"
+                control={control}
+                render={({ field: { value, onChange } }) => (
+                  <IdentityForm
+                    value={value}
+                    onChange={onChange}
+                    errors={errors.identity as any}
+                    disabled={isSubmitting}
+                  />
+                )}
+              />
+            </div>
+          )}
+
+          {/* TAB 2: COMMERCIAL TERMS */}
+          {openedTab === CustomerTab.Defaults && (
+            <div className="space-y-8">
+              <div className="border-b border-zinc-200 pb-4 dark:border-zinc-800">
+                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  Commercial Terms & Catering Parameters
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Configure automated credit limits, billing terms, and statutory TDS rules.
+                </p>
+              </div>
+
+              <Controller
+                name="defaults"
+                control={control}
+                render={({ field: { value, onChange } }) => (
+                  <DefaultsForm
+                    value={value}
+                    onChange={onChange}
+                    errors={errors.defaults as any}
+                    disabled={isSubmitting}
+                  />
+                )}
+              />
+            </div>
+          )}
+
+          {/* TAB 3: ADDRESSES */}
+          {openedTab === CustomerTab.Address && (
+            <div className="space-y-8">
+              <div className="border-b border-zinc-200 pb-4 dark:border-zinc-800">
+                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  Addresses & Dispatch Locations
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Billing headquarters and default banquet/event drop-off locations.
+                </p>
+              </div>
+
+              <div className="space-y-8">
+                <Controller
+                  name="permanentAddress"
+                  control={control}
+                  render={({ field: { value, onChange } }) => (
+                    <AddressForm
+                      title="Principal Billing Headquarters"
+                      idPrefix="permanent-address"
+                      value={value}
+                      onChange={onChange}
+                      errors={errors.permanentAddress as any}
+                      disabled={isSubmitting}
+                    />
+                  )}
+                />
+
+                <hr className="border-zinc-200 dark:border-zinc-800" />
+
+                <Controller
+                  name="temporaryAddress"
+                  control={control}
+                  render={({ field: { value, onChange } }) => (
+                    <AddressForm
+                      title="Default Event / Delivery Venue"
+                      idPrefix="temporary-address"
+                      value={value}
+                      onChange={onChange}
+                      errors={errors.temporaryAddress as any}
+                      disabled={isSubmitting}
+                    />
+                  )}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: CONTACTS */}
+          {openedTab === CustomerTab.Contacts && (
+            <div className="space-y-8">
+              <div className="border-b border-zinc-200 pb-4 dark:border-zinc-800">
+                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  Event Coordinators & Emergency Contacts
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Primary booking representative and day-of-event on-site supervisors.
+                </p>
+              </div>
+
+              <Controller
+                name="contact"
+                control={control}
+                render={({ field: { value, onChange } }) => (
+                  <ContactForm
+                    title="Primary Booking Representative"
+                    idPrefix="personal-contact"
+                    showNameAndRelation={false}
+                    value={value}
+                    onChange={onChange}
+                    errors={errors.contact as any}
+                    disabled={isSubmitting}
+                  />
+                )}
+              />
+
+              <hr className="border-zinc-200 dark:border-zinc-800" />
+
+              <div className="space-y-6">
+                <div className="flex items-center justify-between border-b border-zinc-200 pb-3 dark:border-zinc-800">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                      On-Site Emergency Contacts ({emergencyFields.length})
+                    </h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Reachable during live event logistics and kitchen operations.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      appendEmergencyContact({
+                        isPrimary: false,
+                        name: "",
+                        phone: "",
+                        relation: "",
+                        email: "",
+                      })
+                    }
+                    disabled={isSubmitting}
+                    className="flex h-8 items-center gap-1.5 rounded-none border-2 border-dashed border-zinc-300 bg-white text-xs font-semibold text-zinc-700 hover:border-red-600 hover:bg-zinc-50 hover:text-red-600 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-red-500 dark:hover:bg-zinc-900 dark:hover:text-red-400"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Contact
+                  </Button>
+                </div>
+
+                <div className="space-y-4">
+                  {emergencyFields.map((field, index) => (
+                    <div
+                      key={field.id}
+                      className="relative rounded-none border border-zinc-200 bg-zinc-50/50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/40"
+                    >
+                      <div className="mb-4 flex items-center justify-between border-b border-zinc-200 pb-3 dark:border-zinc-800/60">
+                        <span className="flex items-center gap-1.5 text-xs font-bold text-zinc-700 dark:text-zinc-400">
+                          <PhoneCall className="h-3.5 w-3.5 text-red-600 dark:text-red-500" />
+                          Contact #{index + 1}
+                        </span>
+                        {emergencyFields.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeEmergencyContact(index)}
+                            disabled={isSubmitting}
+                            aria-label={`Remove emergency contact #${index + 1}`}
+                            className="flex items-center gap-1 text-xs text-zinc-500 transition-colors hover:text-red-600 dark:text-zinc-500 dark:hover:text-red-400"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Remove
+                          </button>
+                        )}
+                      </div>
+
+                      <Controller
+                        name={`emergencyContact.${index}`}
+                        control={control}
+                        render={({ field: { value, onChange } }) => (
+                          <ContactForm
+                            title=""
+                            idPrefix={`emergency-contact-${index}`}
+                            showNameAndRelation={true}
+                            value={value}
+                            onChange={onChange}
+                            errors={
+                              Array.isArray(errors.emergencyContact)
+                                ? (errors.emergencyContact[index] as any)
+                                : undefined
+                            }
+                            disabled={isSubmitting}
+                          />
+                        )}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: DOCUMENTS & KYC */}
+          {openedTab === CustomerTab.Document && (
+            <div className="space-y-8">
+              <div className="border-b border-zinc-200 pb-4 dark:border-zinc-800">
+                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  Compliance & Verification Documents
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Catering service contracts, tax exemption permits, PAN cards, and agreements.
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center justify-between border-b border-zinc-200 pb-3 dark:border-zinc-800">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                      Uploaded Documents ({documentFields.length})
+                    </h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Files attached to the client portfolio.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      appendDocument({
+                        documentNumber: "",
+                        documentType: "citizenship",
+                        mediaRefs: [],
+                        description: "",
+                        expiryDate: undefined,
+                        issuedBy: "",
+                        issuedDate: undefined,
+                        issuedDistrict: "",
+                        title: "",
+                      })
+                    }
+                    disabled={isSubmitting}
+                    className="flex h-8 items-center gap-1.5 rounded-none border-2 border-dashed border-zinc-300 bg-white text-xs font-semibold text-zinc-700 hover:border-red-600 hover:bg-zinc-50 hover:text-red-600 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-red-500 dark:hover:bg-zinc-900 dark:hover:text-red-400"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Document
+                  </Button>
+                </div>
+
+                <div className="space-y-5">
+                  {documentFields.map((field, index) => (
+                    <div
+                      key={field.id}
+                      className="relative rounded-none border border-zinc-200 bg-zinc-50/50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/40"
+                    >
+                      <div className="mb-4 flex items-center justify-between border-b border-zinc-200 pb-3 dark:border-zinc-800/60">
+                        <span className="flex items-center gap-1.5 text-xs font-bold text-zinc-700 dark:text-zinc-400">
+                          <FileCheck className="h-3.5 w-3.5 text-red-600 dark:text-red-500" />
+                          Document #{index + 1}
+                        </span>
+                        {documentFields.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeDocument(index)}
+                            disabled={isSubmitting}
+                            aria-label={`Remove document #${index + 1}`}
+                            className="flex items-center gap-1 text-xs text-zinc-500 transition-colors hover:text-red-600 dark:text-zinc-500 dark:hover:text-red-400"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Remove
+                          </button>
+                        )}
+                      </div>
+
+                      <Controller
+                        name={`documents.${index}`}
+                        control={control}
+                        render={({ field: { value, onChange } }) => (
+                          <DocumentForm
+                            value={value}
+                            onChange={onChange}
+                            errors={
+                              Array.isArray(errors.documents)
+                                ? (errors.documents[index] as any)
+                                : undefined
+                            }
+                            disabled={isSubmitting}
+                          />
+                        )}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: SOCIAL MEDIA */}
+          {openedTab === CustomerTab.SocialProfile && (
+            <div className="space-y-8">
+              <div className="border-b border-zinc-200 pb-4 dark:border-zinc-800">
+                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  Digital & Communication Channels
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Direct WhatsApp dispatch lines and social media handles for event coordination.
+                </p>
+              </div>
+
+              <Controller
+                name="socialMediaProfiles"
+                control={control}
+                render={({ field: { value, onChange } }) => (
+                  <SocialProfileForm
+                    value={value}
+                    onChange={onChange}
+                    errors={errors.socialMediaProfiles as any}
+                    disabled={isSubmitting}
+                  />
+                )}
+              />
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* 4. MOBILE FLOATING ACTION BAR */}
+      <div className="sticky bottom-0 z-20 flex items-center justify-between border-t-2 border-zinc-300 bg-white px-4 py-3 shadow-lg dark:border-zinc-800 dark:bg-zinc-950 sm:hidden">
+        <div>
+          <span className="block text-[10px] font-bold text-zinc-400 uppercase">Active Tab</span>
+          <span className="text-xs font-black text-zinc-900 uppercase dark:text-zinc-100">
+            {openedTab}
+          </span>
+        </div>
+        <Button
+          type="submit"
+          disabled={isSubmitting}
+          className="h-9 rounded-none border border-red-600 bg-red-600 px-4 text-xs font-bold uppercase tracking-wider text-white shadow-md hover:bg-red-700"
+        >
+          {isSubmitting ? "Saving..." : "Save Record"}
+        </Button>
+      </div>
+    </form>
   );
 }

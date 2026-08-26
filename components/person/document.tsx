@@ -1,8 +1,9 @@
 "use client";
 
-import { useFormContext, Controller, useFieldArray } from "react-hook-form";
-import { format } from "date-fns";
-import { CalendarIcon, Plus, X, Upload } from "lucide-react";
+import * as React from "react";
+import { format, isValid } from "date-fns";
+import { CalendarIcon } from "lucide-react";
+
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,10 +22,9 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { CustomerFormValues } from "../customer/customer";
-import { ChangeEvent, useState } from "react";
+import { ImagePicker } from "../image-picker";
 
-const documentTypeOptions = [
+export const documentTypeOptions = [
   { value: "citizenship", label: "Citizenship" },
   { value: "pan", label: "PAN" },
   { value: "passport", label: "Passport" },
@@ -38,419 +38,392 @@ const documentTypeOptions = [
   { value: "other", label: "Other" },
 ] as const;
 
-export function DocumentForm() {
-  const {
-    control,
-    formState: { errors, disabled: formDisabled },
-  } = useFormContext<CustomerFormValues>();
+export type DocumentType = (typeof documentTypeOptions)[number]["value"];
 
-  const isSubmitting = Boolean(formDisabled);
-  const docErrors = errors.documents ?? {};
+export type DocumentFormValues = {
+  documentType?: DocumentType | string;
+  documentNumber?: string;
+  title?: string;
+  description?: string;
+  issuedBy?: string;
+  issuedDistrict?: string;
+  issuedDate?: Date | string | null;
+  expiryDate?: Date | string | null;
+  mediaRefs?: string[];
+};
 
-  // Fixed type-safe useFieldArray
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "documents.mediaRefs",
-  });
+export type DocumentFormErrors = Partial<
+  Record<keyof DocumentFormValues, { message?: string } | string>
+> & {
+  mediaRefs?:
+    | { message?: string }
+    | string
+    | ({ message?: string } | string | undefined)[];
+};
 
-  // State for upload progress (optional)
-  const [uploading, setUploading] = useState(false);
+export interface DocumentFormProps {
+  value?: DocumentFormValues;
+  onChange: (value: DocumentFormValues) => void;
+  errors?: DocumentFormErrors;
+  disabled?: boolean;
+  /** Optional custom file upload handler returning the media ID / URL */
+  onUpload?: (file: File) => Promise<string>;
+}
 
-  // Handle file upload – calls your API and appends returned mediaId
-  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+function errorMessage(
+  errors: DocumentFormErrors | undefined,
+  key: keyof DocumentFormValues,
+): string | undefined {
+  const err = errors?.[key];
+  if (!err) return undefined;
+  return typeof err === "string" ? err : (err as { message?: string }).message;
+}
 
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      console.log(formData)
+export function DocumentForm({
+  value = {},
+  onChange,
+  errors,
+  disabled = false,
+  onUpload,
+}: DocumentFormProps) {
+  const [issuedDateOpen, setIssuedDateOpen] = React.useState(false);
+  const [expiryDateOpen, setExpiryDateOpen] = React.useState(false);
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error("Upload failed");
-      }
-
-      const data = await response.json();
-      // Assume response: { mediaId: string }
-      append(data.mediaId);
-    } catch (error) {
-      console.error("Upload error:", error);
-      // You might want to show a toast here
-    } finally {
-      setUploading(false);
-      // Reset the input so the same file can be re-uploaded
-      e.target.value = "";
-    }
+  const setField = <K extends keyof DocumentFormValues>(
+    key: K,
+    fieldValue: DocumentFormValues[K],
+  ) => {
+    onChange({ ...value, [key]: fieldValue });
   };
 
+  const toValidDate = (val?: Date | string | null): Date | undefined => {
+    if (!val) return undefined;
+    const dateObj = typeof val === "string" ? new Date(val) : val;
+    return isValid(dateObj) ? dateObj : undefined;
+  };
+
+  const documentTypeError = errorMessage(errors, "documentType");
+  const documentNumberError = errorMessage(errors, "documentNumber");
+  const titleError = errorMessage(errors, "title");
+  const descriptionError = errorMessage(errors, "description");
+  const issuedByError = errorMessage(errors, "issuedBy");
+  const issuedDistrictError = errorMessage(errors, "issuedDistrict");
+  const issuedDateError = errorMessage(errors, "issuedDate");
+  const expiryDateError = errorMessage(errors, "expiryDate");
+  const mediaRefsError = errorMessage(errors, "mediaRefs");
+
   return (
-    <div>
-      <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-        Document
-      </h3>
+    <div className="space-y-6">
+      <div className="border-b border-zinc-200 pb-3 dark:border-zinc-800">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+          Document Details & Verification Files
+        </h3>
+        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          Provide identity numbers, authority credentials, and attached file proof.
+        </p>
+      </div>
 
       {/* Document type & Document number */}
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label className="text-zinc-700 dark:text-zinc-300">
-            Document type <span className="text-red-600">*</span>
+          <Label
+            htmlFor="doc-documentType"
+            className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+          >
+            Document type <span className="text-red-600 dark:text-red-500">*</span>
           </Label>
-          <Controller<CustomerFormValues, "documents.documentType">
-            name="documents.documentType"
-            control={control}
-            render={({ field: { value, onChange } }) => (
-              <Select onValueChange={onChange} value={value} disabled={isSubmitting}>
-                <SelectTrigger
-                  className={cn(
-                    "w-full rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors",
-                    "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                    "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100",
-                    docErrors.documentType && "border-red-500"
-                  )}
-                >
-                  <SelectValue placeholder="Select document type" />
-                </SelectTrigger>
-                <SelectContent className="rounded-none border-zinc-200 dark:border-zinc-700">
-                  {documentTypeOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-          {docErrors.documentType && (
-            <p className="text-sm text-red-600">{docErrors.documentType.message}</p>
+          <Select
+            value={value.documentType ?? ""}
+            onValueChange={(val) => setField("documentType", val as string)}
+            disabled={disabled}
+          >
+            <SelectTrigger
+              id="doc-documentType"
+              aria-invalid={Boolean(documentTypeError)}
+              className={cn(
+                "h-11 w-full rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors",
+                "focus:border-red-500 focus:ring-1 focus:ring-red-500/20",
+                "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100",
+                documentTypeError && "border-red-500",
+              )}
+            >
+              <SelectValue placeholder="Select document type" />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+              {documentTypeOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {documentTypeError && (
+            <p className="text-xs text-red-600 dark:text-red-500">
+              {documentTypeError}
+            </p>
           )}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="documents-documentNumber" className="text-zinc-700 dark:text-zinc-300">
-            Document number <span className="text-red-600">*</span>
+          <Label
+            htmlFor="doc-documentNumber"
+            className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+          >
+            Document number <span className="text-red-600 dark:text-red-500">*</span>
           </Label>
-          <Controller<CustomerFormValues, "documents.documentNumber">
-            name="documents.documentNumber"
-            control={control}
-            render={({ field: { value, onChange, onBlur, ref } }) => (
-              <Input
-                id="documents-documentNumber"
-                placeholder="e.g. 12-34-56789"
-                value={value ?? ""}
-                onChange={(e) => onChange(e.target.value.toUpperCase())}
-                onBlur={onBlur}
-                ref={ref}
-                disabled={isSubmitting}
-                className={cn(
-                  "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm uppercase transition-colors placeholder:text-zinc-400 placeholder:normal-case",
-                  "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                  "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                  docErrors.documentNumber && "border-red-500"
-                )}
-              />
+          <Input
+            id="doc-documentNumber"
+            placeholder="e.g. 12-34-56789"
+            value={value.documentNumber ?? ""}
+            onChange={(e) => setField("documentNumber", e.target.value.toUpperCase())}
+            disabled={disabled}
+            aria-invalid={Boolean(documentNumberError)}
+            className={cn(
+              "h-11 rounded-none border-zinc-300 bg-white px-4 py-3 text-sm uppercase text-zinc-900 transition-colors placeholder:text-zinc-400 placeholder:normal-case",
+              "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+              "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+              documentNumberError && "border-red-500",
             )}
           />
-          {docErrors.documentNumber && (
-            <p className="text-sm text-red-600">{docErrors.documentNumber.message}</p>
+          {documentNumberError && (
+            <p className="text-xs text-red-600 dark:text-red-500">
+              {documentNumberError}
+            </p>
           )}
         </div>
       </div>
 
       {/* Title */}
-      <div className="mt-6 space-y-2">
-        <Label htmlFor="documents-title" className="text-zinc-700 dark:text-zinc-300">
-          Title
+      <div className="space-y-2">
+        <Label
+          htmlFor="doc-title"
+          className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+        >
+          Document Title / Caption
         </Label>
-        <Controller<CustomerFormValues, "documents.title">
-          name="documents.title"
-          control={control}
-          render={({ field: { value, onChange, onBlur, ref } }) => (
-            <Input
-              id="documents-title"
-              placeholder="e.g. Citizenship certificate"
-              maxLength={200}
-              value={value ?? ""}
-              onChange={onChange}
-              onBlur={onBlur}
-              ref={ref}
-              disabled={isSubmitting}
-              className={cn(
-                "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                docErrors.title && "border-red-500"
-              )}
-            />
+        <Input
+          id="doc-title"
+          placeholder="e.g. Citizenship Certificate (Front & Back)"
+          maxLength={200}
+          value={value.title ?? ""}
+          onChange={(e) => setField("title", e.target.value)}
+          disabled={disabled}
+          aria-invalid={Boolean(titleError)}
+          className={cn(
+            "h-11 rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
+            "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+            "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+            titleError && "border-red-500",
           )}
         />
-        {docErrors.title && (
-          <p className="text-sm text-red-600">{docErrors.title.message}</p>
+        {titleError && (
+          <p className="text-xs text-red-600 dark:text-red-500">{titleError}</p>
         )}
       </div>
 
       {/* Description */}
-      <div className="mt-6 space-y-2">
-        <Label htmlFor="documents-description" className="text-zinc-700 dark:text-zinc-300">
-          Description
+      <div className="space-y-2">
+        <Label
+          htmlFor="doc-description"
+          className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+        >
+          Description & Remarks
         </Label>
-        <Controller<CustomerFormValues, "documents.description">
-          name="documents.description"
-          control={control}
-          render={({ field: { value, onChange, onBlur, ref } }) => (
-            <Textarea
-              id="documents-description"
-              placeholder="Any additional information..."
-              rows={4}
-              maxLength={2000}
-              value={value ?? ""}
-              onChange={onChange}
-              onBlur={onBlur}
-              ref={ref}
-              disabled={isSubmitting}
-              className={cn(
-                "resize-none rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                docErrors.description && "border-red-500"
-              )}
-            />
+        <Textarea
+          id="doc-description"
+          placeholder="Any additional notes or legal stipulations regarding this certificate..."
+          rows={3}
+          maxLength={2000}
+          value={value.description ?? ""}
+          onChange={(e) => setField("description", e.target.value)}
+          disabled={disabled}
+          aria-invalid={Boolean(descriptionError)}
+          className={cn(
+            "resize-none rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
+            "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+            "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+            descriptionError && "border-red-500",
           )}
         />
-        {docErrors.description && (
-          <p className="text-sm text-red-600">{docErrors.description.message}</p>
+        {descriptionError && (
+          <p className="text-xs text-red-600 dark:text-red-500">
+            {descriptionError}
+          </p>
         )}
       </div>
 
       {/* Issued by & Issued district */}
-      <div className="mt-6 grid gap-6 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="documents-issuedBy" className="text-zinc-700 dark:text-zinc-300">
-            Issued by
+          <Label
+            htmlFor="doc-issuedBy"
+            className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+          >
+            Issuing Authority / Agency
           </Label>
-          <Controller<CustomerFormValues, "documents.issuedBy">
-            name="documents.issuedBy"
-            control={control}
-            render={({ field: { value, onChange, onBlur, ref } }) => (
-              <Input
-                id="documents-issuedBy"
-                placeholder="e.g. District Administration Office"
-                maxLength={200}
-                value={value ?? ""}
-                onChange={onChange}
-                onBlur={onBlur}
-                ref={ref}
-                disabled={isSubmitting}
-                className={cn(
-                  "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                  "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                  "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                  docErrors.issuedBy && "border-red-500"
-                )}
-              />
+          <Input
+            id="doc-issuedBy"
+            placeholder="e.g. District Administration Office"
+            maxLength={200}
+            value={value.issuedBy ?? ""}
+            onChange={(e) => setField("issuedBy", e.target.value)}
+            disabled={disabled}
+            aria-invalid={Boolean(issuedByError)}
+            className={cn(
+              "h-11 rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
+              "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+              "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+              issuedByError && "border-red-500",
             )}
           />
-          {docErrors.issuedBy && (
-            <p className="text-sm text-red-600">{docErrors.issuedBy.message}</p>
+          {issuedByError && (
+            <p className="text-xs text-red-600 dark:text-red-500">
+              {issuedByError}
+            </p>
           )}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="documents-issuedDistrict" className="text-zinc-700 dark:text-zinc-300">
-            Issued district
+          <Label
+            htmlFor="doc-issuedDistrict"
+            className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+          >
+            Issuing District / State
           </Label>
-          <Controller<CustomerFormValues, "documents.issuedDistrict">
-            name="documents.issuedDistrict"
-            control={control}
-            render={({ field: { value, onChange, onBlur, ref } }) => (
-              <Input
-                id="documents-issuedDistrict"
-                placeholder="e.g. Kathmandu"
-                maxLength={100}
-                value={value ?? ""}
-                onChange={onChange}
-                onBlur={onBlur}
-                ref={ref}
-                disabled={isSubmitting}
-                className={cn(
-                  "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                  "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                  "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                  docErrors.issuedDistrict && "border-red-500"
-                )}
-              />
+          <Input
+            id="doc-issuedDistrict"
+            placeholder="e.g. Kathmandu"
+            maxLength={100}
+            value={value.issuedDistrict ?? ""}
+            onChange={(e) => setField("issuedDistrict", e.target.value)}
+            disabled={disabled}
+            aria-invalid={Boolean(issuedDistrictError)}
+            className={cn(
+              "h-11 rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
+              "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+              "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+              issuedDistrictError && "border-red-500",
             )}
           />
-          {docErrors.issuedDistrict && (
-            <p className="text-sm text-red-600">{docErrors.issuedDistrict.message}</p>
+          {issuedDistrictError && (
+            <p className="text-xs text-red-600 dark:text-red-500">
+              {issuedDistrictError}
+            </p>
           )}
         </div>
       </div>
 
       {/* Issued date & Expiry date */}
-      <div className="mt-6 grid gap-6 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label className="text-zinc-700 dark:text-zinc-300">Issued date</Label>
-          <Controller<CustomerFormValues, "documents.issuedDate">
-            name="documents.issuedDate"
-            control={control}
-            render={({ field: { value, onChange } }) => (
-              <Popover>
-                <PopoverTrigger className={"w-full"}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={isSubmitting}
-                    className={cn(
-                      "w-full justify-start rounded-none border-zinc-300 bg-white px-4 py-3 text-left font-normal transition-colors",
-                      "hover:border-red-400 hover:bg-red-50/50",
-                      "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                      "dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800",
-                      !value && "text-zinc-400"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-red-600" />
-                    {value ? format(value, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    captionLayout="dropdown"
-                    selected={value ?? undefined}
-                    onSelect={onChange}
-                    disabled={(date) => date > new Date()}
-                    className="w-full rounded-none"
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-          />
-          {docErrors.issuedDate && (
-            <p className="text-sm text-red-600">{docErrors.issuedDate.message}</p>
+          <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400">
+            Issued date
+          </Label>
+          <Popover open={issuedDateOpen} onOpenChange={setIssuedDateOpen}>
+            <PopoverTrigger>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={disabled}
+                aria-invalid={Boolean(issuedDateError)}
+                className={cn(
+                  "h-11 w-full justify-start rounded-none border-zinc-300 bg-white px-4 py-3 text-left text-sm font-normal text-zinc-900 transition-colors",
+                  "hover:border-red-400 hover:bg-red-50/50",
+                  "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+                  "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:hover:bg-zinc-800",
+                  !value.issuedDate && "text-zinc-400 dark:text-zinc-600",
+                  issuedDateError && "border-red-500",
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4 text-red-600 dark:text-red-500" />
+                {toValidDate(value.issuedDate)
+                  ? format(toValidDate(value.issuedDate)!, "PPP")
+                  : "Pick issue date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto rounded-none border-zinc-200 p-0 dark:border-zinc-800" align="start">
+              <Calendar
+                mode="single"
+                captionLayout="dropdown"
+                selected={toValidDate(value.issuedDate)}
+                onSelect={(date) => {
+                  setField("issuedDate", date ?? null);
+                  setIssuedDateOpen(false);
+                }}
+                disabled={(date) => date > new Date()}
+                className="rounded-none"
+              />
+            </PopoverContent>
+          </Popover>
+          {issuedDateError && (
+            <p className="text-xs text-red-600 dark:text-red-500">
+              {issuedDateError}
+            </p>
           )}
         </div>
 
         <div className="space-y-2">
-          <Label className="text-zinc-700 dark:text-zinc-300">Expiry date</Label>
-          <Controller<CustomerFormValues, "documents.expiryDate">
-            name="documents.expiryDate"
-            control={control}
-            render={({ field: { value, onChange } }) => (
-              <Popover>
-                <PopoverTrigger className={"w-full"}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={isSubmitting}
-                    className={cn(
-                      "w-full justify-start rounded-none border-zinc-300 bg-white px-4 py-3 text-left font-normal transition-colors",
-                      "hover:border-red-400 hover:bg-red-50/50",
-                      "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                      "dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800",
-                      !value && "text-zinc-400"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-red-600" />
-                    {value ? format(value, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    captionLayout="dropdown"
-                    selected={value ?? undefined}
-                    onSelect={onChange}
-                    className="w-full rounded-none"
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-          />
-          {docErrors.expiryDate && (
-            <p className="text-sm text-red-600">{docErrors.expiryDate.message}</p>
+          <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400">
+            Expiry date
+          </Label>
+          <Popover open={expiryDateOpen} onOpenChange={setExpiryDateOpen}>
+            <PopoverTrigger>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={disabled}
+                aria-invalid={Boolean(expiryDateError)}
+                className={cn(
+                  "h-11 w-full justify-start rounded-none border-zinc-300 bg-white px-4 py-3 text-left text-sm font-normal text-zinc-900 transition-colors",
+                  "hover:border-red-400 hover:bg-red-50/50",
+                  "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+                  "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:hover:bg-zinc-800",
+                  !value.expiryDate && "text-zinc-400 dark:text-zinc-600",
+                  expiryDateError && "border-red-500",
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4 text-red-600 dark:text-red-500" />
+                {toValidDate(value.expiryDate)
+                  ? format(toValidDate(value.expiryDate)!, "PPP")
+                  : "Pick expiry date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto rounded-none border-zinc-200 p-0 dark:border-zinc-800" align="start">
+              <Calendar
+                mode="single"
+                captionLayout="dropdown"
+                selected={toValidDate(value.expiryDate)}
+                onSelect={(date) => {
+                  setField("expiryDate", date ?? null);
+                  setExpiryDateOpen(false);
+                }}
+                className="rounded-none"
+              />
+            </PopoverContent>
+          </Popover>
+          {expiryDateError && (
+            <p className="text-xs text-red-600 dark:text-red-500">
+              {expiryDateError}
+            </p>
           )}
         </div>
       </div>
 
-      {/* Media refs – with file upload button */}
-      <div className="mt-6 space-y-2">
-        <Label className="text-zinc-700 dark:text-zinc-300">Attached media</Label>
-        <div className="space-y-2">
-          {fields.map((field, index) => (
-            <div key={field.id} className="flex items-center gap-2">
-              <Controller<CustomerFormValues, `documents.mediaRefs.${number}`>
-                name={`documents.mediaRefs.${index}`}
-                control={control}
-                render={({ field: { value, onChange, onBlur, ref } }) => (
-                  <Input
-                    placeholder="Media reference ID"
-                    value={value ?? ""}
-                    onChange={onChange}
-                    onBlur={onBlur}
-                    ref={ref}
-                    disabled={isSubmitting}
-                    className={cn(
-                      "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                      "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                      "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500"
-                    )}
-                  />
-                )}
-              />
-              <button
-                type="button"
-                onClick={() => remove(index)}
-                disabled={isSubmitting}
-                aria-label="Remove media reference"
-                className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-zinc-300 text-zinc-600 transition-colors hover:border-red-500 hover:text-red-600 dark:border-zinc-700 dark:text-zinc-300"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => append("")}
-              disabled={isSubmitting}
-              className="flex items-center gap-2 border-2 border-dashed border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:border-red-400 hover:text-red-600 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-red-500"
-            >
-              <Plus className="h-4 w-4" />
-              Add media reference (manual)
-            </button>
-            <div className="relative">
-              <input
-                type="file"
-                id="file-upload"
-                className="sr-only"
-                onChange={handleFileUpload}
-                disabled={isSubmitting || uploading}
-                accept="image/*,application/pdf"
-              />
-              <label
-                htmlFor="file-upload"
-                className={cn(
-                  "flex cursor-pointer items-center gap-2 border-2 border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-600 transition-colors",
-                  "hover:border-red-400 hover:text-red-600 dark:border-zinc-700 dark:text-zinc-300",
-                  "disabled:cursor-not-allowed disabled:opacity-60",
-                  uploading && "opacity-60"
-                )}
-              >
-                <Upload className="h-4 w-4" />
-                {uploading ? "Uploading..." : "Upload file"}
-              </label>
-            </div>
-          </div>
-        </div>
-        {docErrors.mediaRefs && (
-          <p className="text-sm text-red-600">{docErrors.mediaRefs.message as string}</p>
-        )}
+      {/* Multiple Image Picker for Document Files */}
+      <div className="pt-2">
+        <ImagePicker
+          multiple={true}
+          maxFiles={10}
+          maxSizeMB={10}
+          label="Attached Verification Scans & Documents"
+          description="Upload certificates, scanned PAN cards, or PDF agreements (up to 10MB each)"
+          value={value.mediaRefs ?? []}
+          onChange={(urls: string[]) => setField("mediaRefs", urls)}
+          error={mediaRefsError}
+          disabled={disabled}
+          onUpload={onUpload}
+          idPrefix="doc-media"
+        />
       </div>
     </div>
   );

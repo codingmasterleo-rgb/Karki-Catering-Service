@@ -1,132 +1,136 @@
 "use client";
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { Button } from "@/components/ui/button";
+import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { FormSection } from "../FormSection";
-
 
 export type OwnerType = "Person" | "Company";
 
-export interface BankDetailFormValues {
-  ownerRef: string;
-  ownerType: OwnerType;
-  bankName: string;
-  accountNumber: string;
-  accountHolderName: string;
+export type BankDetailFormValues = {
+  ownerRef?: string;
+  ownerType?: OwnerType;
+  bankName?: string;
+  accountNumber?: string;
+  accountHolderName?: string;
   branch?: string;
-  isPrimary: boolean;
+  isPrimary?: boolean;
+};
+
+export type BankDetailFormErrors = Partial<
+  Record<keyof BankDetailFormValues, { message?: string } | string>
+>;
+
+export interface BankDetailFormProps {
+  value?: BankDetailFormValues;
+  onChange: (value: BankDetailFormValues) => void;
+  errors?: BankDetailFormErrors;
+  disabled?: boolean;
+  title?: string;
+  /** Prefix for HTML IDs to prevent collisions when rendering multiple bank accounts */
+  idPrefix?: string;
 }
 
-const bankDetailFormSchema = z.object({
-  ownerRef: z.string().min(1, "Owner reference is required"),
-  ownerType: z.enum(["Person", "Company"]),
-  bankName: z.string().min(1, "Bank name is required"),
-  accountNumber: z.string().min(1, "Account number is required"),
-  accountHolderName: z.string().min(1, "Account holder name is required"),
-  branch: z.string().optional(),
-  isPrimary: z.boolean(),
-});
-
-
-interface BankDetailFormProps {
-  ownerRef: string;
-  ownerType: OwnerType;
-  defaultValues?: Partial<Omit<BankDetailFormValues, "ownerRef" | "ownerType">>;
-  onSubmit: (data: BankDetailFormValues) => void | Promise<void>;
-  isSubmitting?: boolean;
-  submitLabel?: string;
-  onCancel?: () => void;
+function errorMessage(
+  errors: BankDetailFormErrors | undefined,
+  key: keyof BankDetailFormValues,
+): string | undefined {
+  const err = errors?.[key];
+  if (!err) return undefined;
+  return typeof err === "string" ? err : err.message;
 }
 
 export function BankDetailForm({
-  ownerRef,
-  ownerType,
-  defaultValues,
-  onSubmit,
-  isSubmitting = false,
-  submitLabel = "Save bank details",
-  onCancel,
+  value = {},
+  onChange,
+  errors,
+  disabled = false,
+  title = "Bank details",
+  idPrefix = "bank",
 }: BankDetailFormProps) {
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors },
-  } = useForm<BankDetailFormValues>({
-    resolver: zodResolver(bankDetailFormSchema),
-    defaultValues: {
-      ownerRef,
-      ownerType,
-      bankName: "",
-      accountNumber: "",
-      accountHolderName: "",
-      branch: "",
-      isPrimary: false,
-      ...defaultValues,
-    },
-  });
+  const setField = <K extends keyof BankDetailFormValues>(
+    key: K,
+    fieldValue: BankDetailFormValues[K],
+  ) => {
+    onChange({ ...value, [key]: fieldValue });
+  };
 
-  const isPrimary = watch("isPrimary");
+  const bankNameError = errorMessage(errors, "bankName");
+  const accountHolderNameError = errorMessage(errors, "accountHolderName");
+  const accountNumberError = errorMessage(errors, "accountNumber");
+  const branchError = errorMessage(errors, "branch");
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
-      <FormSection label="Bank details">
-        <input type="hidden" {...register("ownerRef")} />
-      <input type="hidden" {...register("ownerType")} />
+    <div className="space-y-6">
+      {/* Section title */}
+      {title && (
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          {title}
+        </h3>
+      )}
 
       {/* Bank name */}
       <div className="space-y-1.5">
         <Label
-          htmlFor="bankName"
-          className="text-zinc-400 text-sm font-medium"
+          htmlFor={`${idPrefix}-bankName`}
+          className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
         >
           Bank name <span className="text-red-500">*</span>
         </Label>
         <Input
-          id="bankName"
-          {...register("bankName")}
+          id={`${idPrefix}-bankName`}
           placeholder="e.g. Nepal SBI Bank"
+          value={value.bankName ?? ""}
+          onChange={(e) => setField("bankName", e.target.value)}
+          disabled={disabled}
+          aria-invalid={Boolean(bankNameError)}
+          aria-describedby={bankNameError ? `${idPrefix}-bankName-error` : undefined}
           className={cn(
-            "rounded-none border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500",
-            "focus-visible:border-red-500 focus-visible:ring-0",
-            "h-10 px-3 py-2 text-sm",
-            errors.bankName && "border-red-500"
+            "h-10 rounded-none border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
+            "focus-visible:border-red-500 focus-visible:ring-2 focus-visible:ring-red-500/20",
+            "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500",
+            bankNameError && "border-red-500",
           )}
         />
-        {errors.bankName && (
-          <p className="text-red-400 text-sm">{errors.bankName.message}</p>
+        {bankNameError && (
+          <p id={`${idPrefix}-bankName-error`} className="text-sm text-red-500">
+            {bankNameError}
+          </p>
         )}
       </div>
 
       {/* Account holder name */}
       <div className="space-y-1.5">
         <Label
-          htmlFor="accountHolderName"
-          className="text-zinc-400 text-sm font-medium"
+          htmlFor={`${idPrefix}-accountHolderName`}
+          className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
         >
           Account holder name <span className="text-red-500">*</span>
         </Label>
         <Input
-          id="accountHolderName"
-          {...register("accountHolderName")}
+          id={`${idPrefix}-accountHolderName`}
           placeholder="Full name as per bank records"
+          value={value.accountHolderName ?? ""}
+          onChange={(e) => setField("accountHolderName", e.target.value)}
+          disabled={disabled}
+          aria-invalid={Boolean(accountHolderNameError)}
+          aria-describedby={
+            accountHolderNameError ? `${idPrefix}-accountHolderName-error` : undefined
+          }
           className={cn(
-            "rounded-none border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500",
-            "focus-visible:border-red-500 focus-visible:ring-0",
-            "h-10 px-3 py-2 text-sm",
-            errors.accountHolderName && "border-red-500"
+            "h-10 rounded-none border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
+            "focus-visible:border-red-500 focus-visible:ring-2 focus-visible:ring-red-500/20",
+            "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500",
+            accountHolderNameError && "border-red-500",
           )}
         />
-        {errors.accountHolderName && (
-          <p className="text-red-400 text-sm">
-            {errors.accountHolderName.message}
+        {accountHolderNameError && (
+          <p
+            id={`${idPrefix}-accountHolderName-error`}
+            className="text-sm text-red-500"
+          >
+            {accountHolderNameError}
           </p>
         )}
       </div>
@@ -134,25 +138,34 @@ export function BankDetailForm({
       {/* Account number */}
       <div className="space-y-1.5">
         <Label
-          htmlFor="accountNumber"
-          className="text-zinc-400 text-sm font-medium"
+          htmlFor={`${idPrefix}-accountNumber`}
+          className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
         >
           Account number <span className="text-red-500">*</span>
         </Label>
         <Input
-          id="accountNumber"
-          {...register("accountNumber")}
+          id={`${idPrefix}-accountNumber`}
           placeholder="e.g. 1234567890123456"
+          value={value.accountNumber ?? ""}
+          onChange={(e) => setField("accountNumber", e.target.value)}
+          disabled={disabled}
+          aria-invalid={Boolean(accountNumberError)}
+          aria-describedby={
+            accountNumberError ? `${idPrefix}-accountNumber-error` : undefined
+          }
           className={cn(
-            "rounded-none border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500",
-            "focus-visible:border-red-500 focus-visible:ring-0",
-            "h-10 px-3 py-2 text-sm tabular-nums",
-            errors.accountNumber && "border-red-500"
+            "h-10 rounded-none border-zinc-300 bg-white px-3 py-2 text-sm tabular-nums text-zinc-900 transition-colors placeholder:text-zinc-400",
+            "focus-visible:border-red-500 focus-visible:ring-2 focus-visible:ring-red-500/20",
+            "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500",
+            accountNumberError && "border-red-500",
           )}
         />
-        {errors.accountNumber && (
-          <p className="text-red-400 text-sm">
-            {errors.accountNumber.message}
+        {accountNumberError && (
+          <p
+            id={`${idPrefix}-accountNumber-error`}
+            className="text-sm text-red-500"
+          >
+            {accountNumberError}
           </p>
         )}
       </div>
@@ -160,80 +173,55 @@ export function BankDetailForm({
       {/* Branch (optional) */}
       <div className="space-y-1.5">
         <Label
-          htmlFor="branch"
-          className="text-zinc-400 text-sm font-medium"
+          htmlFor={`${idPrefix}-branch`}
+          className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
         >
           Branch
         </Label>
         <Input
-          id="branch"
-          {...register("branch")}
+          id={`${idPrefix}-branch`}
           placeholder="e.g. Durbar Marg, Kathmandu"
+          value={value.branch ?? ""}
+          onChange={(e) => setField("branch", e.target.value)}
+          disabled={disabled}
+          aria-invalid={Boolean(branchError)}
+          aria-describedby={branchError ? `${idPrefix}-branch-error` : undefined}
           className={cn(
-            "rounded-none border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500",
-            "focus-visible:border-red-500 focus-visible:ring-0",
-            "h-10 px-3 py-2 text-sm"
+            "h-10 rounded-none border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
+            "focus-visible:border-red-500 focus-visible:ring-2 focus-visible:ring-red-500/20",
+            "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500",
+            branchError && "border-red-500",
           )}
         />
-        {errors.branch && (
-          <p className="text-red-400 text-sm">{errors.branch.message}</p>
+        {branchError && (
+          <p id={`${idPrefix}-branch-error`} className="text-sm text-red-500">
+            {branchError}
+          </p>
         )}
       </div>
 
       {/* Primary account toggle */}
       <div className="flex items-center justify-between py-2">
         <Label
-          htmlFor="isPrimary"
-          className="text-zinc-400 text-sm font-medium cursor-pointer"
+          htmlFor={`${idPrefix}-isPrimary`}
+          className="cursor-pointer text-sm font-medium text-zinc-700 dark:text-zinc-300"
         >
           Set as primary bank account
         </Label>
         <Switch
-          id="isPrimary"
-          checked={isPrimary}
-          onCheckedChange={(checked) =>
-            setValue("isPrimary", checked, { shouldValidate: true })
-          }
+          id={`${idPrefix}-isPrimary`}
+          checked={Boolean(value.isPrimary)}
+          onCheckedChange={(checked) => setField("isPrimary", checked)}
+          disabled={disabled}
           className={cn(
-            "rounded-none",
-            "border-zinc-600 bg-zinc-700",
-            "data-[state=checked]:bg-red-600",
-            "h-5 w-9",
+            "h-5 w-9 rounded-none",
+            "border-zinc-300 bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-700",
+            "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-600",
             "[&>span]:rounded-none [&>span]:bg-white",
-            "[&>span]:data-[state=checked]:translate-x-4"
+            "[&>span]:data-[state=checked]:translate-x-4",
           )}
         />
       </div>
-
-      {/* Actions */}
-      <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
-        {onCancel && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={isSubmitting}
-            className={cn(
-              "rounded-none border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100",
-              "focus-visible:ring-1 focus-visible:ring-red-500 focus-visible:ring-offset-0"
-            )}
-          >
-            Cancel
-          </Button>
-        )}
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          className={cn(
-            "rounded-none bg-red-600 text-white hover:bg-red-700",
-            "focus-visible:ring-1 focus-visible:ring-red-500 focus-visible:ring-offset-0",
-            "disabled:opacity-50 disabled:cursor-not-allowed"
-          )}
-        >
-          {isSubmitting ? "Saving…" : submitLabel}
-        </Button>
-      </div>
-      </FormSection>
-    </form>
+    </div>
   );
 }

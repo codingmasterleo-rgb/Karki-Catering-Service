@@ -1,8 +1,8 @@
 "use client";
 
-import { useFormContext, Controller } from "react-hook-form";
+import * as React from "react";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, User, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,294 +23,353 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CustomerFormValues } from "../customer/customer";
+import { ImagePicker } from "../image-picker";
 
-type Role = "customer" | "vendor" | "employee";
+export type Role = "customer" | "vendor" | "employee";
 const roleOptions: Role[] = ["customer", "vendor", "employee"];
 
-export function IdentityForm() {
-  const {
-    control,
-    formState: { errors, disabled: formDisabled },
-  } = useFormContext<CustomerFormValues>();
+export type Gender = "male" | "female" | "other";
 
-  const isSubmitting = Boolean(formDisabled);
-  const identityErrors = errors.identity ?? {};
+export type IdentityFormValues = {
+  fullName: string;
+  phone: string;
+  email?: string;
+  gender?: Gender;
+  dateOfBirth?: Date;
+  avatarUrl?: string;
+  roles: Role[];
+  notes?: string;
+};
+
+export type IdentityFormErrors = Partial<
+  Record<keyof IdentityFormValues, { message?: string } | string>
+>;
+
+export interface IdentityFormProps {
+  value: IdentityFormValues;
+  onChange: (value: IdentityFormValues) => void;
+  errors?: IdentityFormErrors;
+  disabled?: boolean;
+  onAvatarUpload?: (file: File) => Promise<string>;
+}
+
+function errorMessage(
+  errors: IdentityFormErrors | undefined,
+  key: keyof IdentityFormValues,
+): string | undefined {
+  const err = errors?.[key];
+  if (!err) return undefined;
+  return typeof err === "string" ? err : err.message;
+}
+
+export function IdentityForm({
+  value,
+  onChange,
+  errors,
+  disabled = false,
+  onAvatarUpload,
+}: IdentityFormProps) {
+  const [calendarOpen, setCalendarOpen] = React.useState(false);
+
+  const setField = <K extends keyof IdentityFormValues>(
+    key: K,
+    fieldValue: IdentityFormValues[K],
+  ) => {
+    onChange({ ...value, [key]: fieldValue });
+  };
+
+  const avatarError = errorMessage(errors, "avatarUrl");
 
   return (
     <div className="space-y-6">
+      {/* Avatar Section with Live Preview */}
+      <div className="space-y-3">
+        <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400">
+          Profile Photo & Avatar
+        </Label>
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          {/* Sharp Avatar Preview Frame */}
+          <div className="group relative flex h-24 w-24 shrink-0 items-center justify-center rounded-none border-2 border-zinc-200 bg-zinc-100 p-0.5 shadow-sm transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:border-zinc-700">
+            {value.avatarUrl ? (
+              <>
+                <img
+                  src={value.avatarUrl}
+                  alt={value.fullName || "User Avatar Preview"}
+                  className="h-full w-full rounded-none object-cover"
+                />
+                {!disabled && (
+                  <button
+                    type="button"
+                    onClick={() => setField("avatarUrl", "")}
+                    aria-label="Remove profile photo"
+                    className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-none border border-red-200 bg-red-600 text-white opacity-90 shadow-sm transition-all hover:bg-red-700 hover:opacity-100 dark:border-red-900"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-1 text-zinc-400 dark:text-zinc-600">
+                <User className="h-8 w-8 stroke-[1.5]" />
+                <span className="text-[9px] font-bold uppercase tracking-wider">No Photo</span>
+              </div>
+            )}
+          </div>
+
+          {/* Integrated Image Picker Upload Area */}
+          <div className="flex-1">
+            <ImagePicker
+              multiple={false}
+              description="JPG, PNG, or WEBP up to 5MB"
+              value={value.avatarUrl ?? ""}
+              onChange={(url: string) => setField("avatarUrl", url)}
+              error={avatarError}
+              disabled={disabled}
+              onUpload={onAvatarUpload}
+              idPrefix="identity-avatar"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Full name & Phone */}
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="identity-fullName" className="text-zinc-700 dark:text-zinc-300">
-            Full name <span className="text-red-600">*</span>
+          <Label
+            htmlFor="identity-fullName"
+            className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+          >
+            Full name <span className="text-red-600 dark:text-red-500">*</span>
           </Label>
-          <Controller<CustomerFormValues, "identity.fullName">
-            name="identity.fullName"
-            control={control}
-            render={({ field: { value, onChange, onBlur, ref } }) => (
-              <Input
-                id="identity-fullName"
-                placeholder="e.g. Sujan Karki"
-                value={value ?? ""}
-                onChange={onChange}
-                onBlur={onBlur}
-                ref={ref}
-                disabled={isSubmitting}
-                className={cn(
-                  "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                  "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                  "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                  identityErrors.fullName && "border-red-500"
-                )}
-              />
+          <Input
+            id="identity-fullName"
+            placeholder="e.g. Sujan Karki"
+            value={value.fullName ?? ""}
+            onChange={(e) => setField("fullName", e.target.value)}
+            disabled={disabled}
+            aria-invalid={Boolean(errorMessage(errors, "fullName"))}
+            className={cn(
+              "h-11 rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
+              "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+              "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+              errorMessage(errors, "fullName") && "border-red-500",
             )}
           />
-          {identityErrors.fullName && (
-            <p className="text-sm text-red-600">{identityErrors.fullName.message}</p>
+          {errorMessage(errors, "fullName") && (
+            <p className="text-xs text-red-600 dark:text-red-500">
+              {errorMessage(errors, "fullName")}
+            </p>
           )}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="identity-phone" className="text-zinc-700 dark:text-zinc-300">
-            Phone number <span className="text-red-600">*</span>
+          <Label
+            htmlFor="identity-phone"
+            className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+          >
+            Phone number <span className="text-red-600 dark:text-red-500">*</span>
           </Label>
-          <Controller<CustomerFormValues, "identity.phone">
-            name="identity.phone"
-            control={control}
-            render={({ field: { value, onChange, onBlur, ref } }) => (
-              <Input
-                id="identity-phone"
-                placeholder="98XXXXXXXX"
-                value={value ?? ""}
-                onChange={onChange}
-                onBlur={onBlur}
-                ref={ref}
-                disabled={isSubmitting}
-                className={cn(
-                  "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                  "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                  "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                  identityErrors.phone && "border-red-500"
-                )}
-              />
+          <Input
+            id="identity-phone"
+            placeholder="98XXXXXXXX"
+            value={value.phone ?? ""}
+            onChange={(e) => setField("phone", e.target.value)}
+            disabled={disabled}
+            aria-invalid={Boolean(errorMessage(errors, "phone"))}
+            className={cn(
+              "h-11 rounded-none border-zinc-300 bg-white px-4 py-3 text-sm tabular-nums text-zinc-900 transition-colors placeholder:text-zinc-400",
+              "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+              "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+              errorMessage(errors, "phone") && "border-red-500",
             )}
           />
-          {identityErrors.phone && (
-            <p className="text-sm text-red-600">{identityErrors.phone.message}</p>
+          {errorMessage(errors, "phone") && (
+            <p className="text-xs text-red-600 dark:text-red-500">
+              {errorMessage(errors, "phone")}
+            </p>
           )}
         </div>
       </div>
 
       {/* Email */}
       <div className="space-y-2">
-        <Label htmlFor="identity-email" className="text-zinc-700 dark:text-zinc-300">
-          Email
+        <Label
+          htmlFor="identity-email"
+          className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+        >
+          Email address
         </Label>
-        <Controller<CustomerFormValues, "identity.email">
-          name="identity.email"
-          control={control}
-          render={({ field: { value, onChange, onBlur, ref } }) => (
-            <Input
-              id="identity-email"
-              type="email"
-              placeholder="name@example.com"
-              value={value ?? ""}
-              onChange={onChange}
-              onBlur={onBlur}
-              ref={ref}
-              disabled={isSubmitting}
-              className={cn(
-                "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                identityErrors.email && "border-red-500"
-              )}
-            />
+        <Input
+          id="identity-email"
+          type="email"
+          placeholder="name@example.com"
+          value={value.email ?? ""}
+          onChange={(e) => setField("email", e.target.value)}
+          disabled={disabled}
+          aria-invalid={Boolean(errorMessage(errors, "email"))}
+          className={cn(
+            "h-11 rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
+            "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+            "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+            errorMessage(errors, "email") && "border-red-500",
           )}
         />
-        {identityErrors.email && (
-          <p className="text-sm text-red-600">{identityErrors.email.message}</p>
+        {errorMessage(errors, "email") && (
+          <p className="text-xs text-red-600 dark:text-red-500">
+            {errorMessage(errors, "email")}
+          </p>
         )}
       </div>
 
       {/* Gender & Date of birth */}
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label className="text-zinc-700 dark:text-zinc-300">Gender</Label>
-          <Controller<CustomerFormValues, "identity.gender">
-            name="identity.gender"
-            control={control}
-            render={({ field: { value, onChange } }) => (
-              <Select onValueChange={onChange} value={value ?? "male"} disabled={isSubmitting}>
-                <SelectTrigger
-                  className={cn(
-                    "w-full rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors",
-                    "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                    "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100",
-                    identityErrors.gender && "border-red-500"
-                  )}
-                >
-                  <SelectValue placeholder="Select gender" />
-                </SelectTrigger>
-                <SelectContent className="rounded-none border-zinc-200 dark:border-zinc-700">
-                  <SelectItem value="male">Male</SelectItem>
-                  <SelectItem value="female">Female</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          />
-          {identityErrors.gender && (
-            <p className="text-sm text-red-600">{identityErrors.gender.message}</p>
+          <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400">
+            Gender
+          </Label>
+          <Select
+            onValueChange={(v) => setField("gender", v as Gender)}
+            value={value.gender}
+            disabled={disabled}
+          >
+            <SelectTrigger
+              className={cn(
+                "h-11 w-full rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors",
+                "focus:border-red-500 focus:ring-1 focus:ring-red-500/20",
+                "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100",
+                errorMessage(errors, "gender") && "border-red-500",
+              )}
+            >
+              <SelectValue placeholder="Select gender" />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+              <SelectItem value="male">Male</SelectItem>
+              <SelectItem value="female">Female</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+          {errorMessage(errors, "gender") && (
+            <p className="text-xs text-red-600 dark:text-red-500">
+              {errorMessage(errors, "gender")}
+            </p>
           )}
         </div>
 
         <div className="space-y-2">
-          <Label className="text-zinc-700 w-full dark:text-zinc-300">Date of birth</Label>
-          <Controller<CustomerFormValues, "identity.dateOfBirth">
-            name="identity.dateOfBirth"
-            control={control}
-            render={({ field: { value, onChange } }) => (
-              <Popover>
-                <PopoverTrigger className={"w-full"}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={isSubmitting}
-                    className={cn(
-                      "w-full justify-start rounded-none border-zinc-300 bg-white px-4 py-3 text-left font-normal transition-colors",
-                      "hover:border-red-400 hover:bg-red-50/50",
-                      "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                      "dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800",
-                      !value && "text-zinc-400"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-red-600" />
-                    {value ? format(value, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    captionLayout="dropdown"
-                    selected={value ?? undefined}
-                    onSelect={onChange}
-                    disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
-                    className="w-full rounded-none"
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-          />
-          {identityErrors.dateOfBirth && (
-            <p className="text-sm text-red-600">{identityErrors.dateOfBirth.message}</p>
+          <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400">
+            Date of birth
+          </Label>
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={disabled}
+                className={cn(
+                  "h-11 w-full justify-start rounded-none border-zinc-300 bg-white px-4 py-3 text-left text-sm font-normal text-zinc-900 transition-colors",
+                  "hover:border-red-400 hover:bg-red-50/50",
+                  "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+                  "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:hover:bg-zinc-800",
+                  !value.dateOfBirth && "text-zinc-400 dark:text-zinc-600",
+                  errorMessage(errors, "dateOfBirth") && "border-red-500",
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4 text-red-600 dark:text-red-500" />
+                {value.dateOfBirth
+                  ? format(value.dateOfBirth, "PPP")
+                  : "Pick a date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto rounded-none p-0 border-zinc-200 dark:border-zinc-800" align="start">
+              <Calendar
+                mode="single"
+                captionLayout="dropdown"
+                selected={value.dateOfBirth}
+                onSelect={(date) => {
+                  setField("dateOfBirth", date);
+                  setCalendarOpen(false);
+                }}
+                disabled={(date) =>
+                  date > new Date() || date < new Date("1900-01-01")
+                }
+                className="rounded-none"
+              />
+            </PopoverContent>
+          </Popover>
+          {errorMessage(errors, "dateOfBirth") && (
+            <p className="text-xs text-red-600 dark:text-red-500">
+              {errorMessage(errors, "dateOfBirth")}
+            </p>
           )}
         </div>
       </div>
 
-      {/* Avatar URL */}
-      <div className="space-y-2">
-        <Label htmlFor="identity-avatarUrl" className="text-zinc-700 dark:text-zinc-300">
-          Avatar URL
-        </Label>
-        <Controller<CustomerFormValues, "identity.avatarUrl">
-          name="identity.avatarUrl"
-          control={control}
-          render={({ field: { value, onChange, onBlur, ref } }) => (
-            <Input
-              id="identity-avatarUrl"
-              placeholder="https://..."
-              value={value ?? ""}
-              onChange={onChange}
-              onBlur={onBlur}
-              ref={ref}
-              disabled={isSubmitting}
-              className={cn(
-                "rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                identityErrors.avatarUrl && "border-red-500"
-              )}
-            />
-          )}
-        />
-        {identityErrors.avatarUrl && (
-          <p className="text-sm text-red-600">{identityErrors.avatarUrl.message}</p>
-        )}
-      </div>
-
       {/* Roles */}
-      <div>
-        <Label className="pb-3 text-zinc-700 dark:text-zinc-300">Roles</Label>
-        <Controller<CustomerFormValues, "identity.roles">
-          name="identity.roles"
-          control={control}
-          render={({ field: { value, onChange } }) => (
-            <div className="flex flex-wrap gap-x-6 gap-y-3">
-              {roleOptions.map((role) => {
-                const checked = (value ?? []).includes(role);
-                return (
-                  <label key={role} className="flex cursor-pointer items-center space-x-2">
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(c) => {
-                        const updated = c
-                          ? [...(value ?? []), role]
-                          : (value ?? []).filter((r) => r !== role);
-                        onChange(updated);
-                      }}
-                      disabled={isSubmitting}
-                      className={cn(
-                        "rounded-none border-zinc-400 transition-colors",
-                        "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-600 data-[state=checked]:text-white",
-                        "data-[state=checked]:[&_svg]:text-white",
-                        "focus-visible:ring-2 focus-visible:ring-red-500/20"
-                      )}
-                    />
-                    <span className="text-sm font-medium capitalize text-zinc-700 dark:text-zinc-300">
-                      {role}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          )}
-        />
-        {identityErrors.roles && (
-          <p className="mt-2 text-sm text-red-600">{identityErrors.roles.message}</p>
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400">
+          Account Roles
+        </Label>
+        <div className="flex flex-wrap gap-x-6 gap-y-3 pt-1">
+          {roleOptions.map((role) => {
+            const checked = (value.roles ?? []).includes(role);
+            return (
+              <label
+                key={role}
+                className="flex cursor-pointer items-center space-x-2"
+              >
+                <Checkbox
+                  checked={checked}
+                  onCheckedChange={(c) => {
+                    const currentRoles = value.roles ?? [];
+                    const updated = c
+                      ? Array.from(new Set([...currentRoles, role]))
+                      : currentRoles.filter((r) => r !== role);
+                    setField("roles", updated);
+                  }}
+                  disabled={disabled}
+                />
+                <span className="text-sm font-medium capitalize text-zinc-800 dark:text-zinc-300">
+                  {role}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+        {errorMessage(errors, "roles") && (
+          <p className="mt-1 text-xs text-red-600 dark:text-red-500">
+            {errorMessage(errors, "roles")}
+          </p>
         )}
       </div>
 
       {/* Notes */}
       <div className="space-y-2">
-        <Label htmlFor="identity-notes" className="pb-3 text-zinc-700 dark:text-zinc-300">
-          Notes
+        <Label
+          htmlFor="identity-notes"
+          className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+        >
+          Special Notes & Preferences
         </Label>
-        <Controller<CustomerFormValues, "identity.notes">
-          name="identity.notes"
-          control={control}
-          render={({ field: { value, onChange, onBlur, ref } }) => (
-            <Textarea
-              id="identity-notes"
-              placeholder="Any additional information..."
-              rows={4}
-              value={value ?? ""}
-              onChange={onChange}
-              onBlur={onBlur}
-              ref={ref}
-              disabled={isSubmitting}
-              className={cn(
-                "resize-none rounded-none border-zinc-300 bg-white px-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                identityErrors.notes && "border-red-500"
-              )}
-            />
+        <Textarea
+          id="identity-notes"
+          placeholder="Dietary requirements, billing instructions, VIP catering notes..."
+          rows={4}
+          value={value.notes ?? ""}
+          onChange={(e) => setField("notes", e.target.value)}
+          disabled={disabled}
+          aria-invalid={Boolean(errorMessage(errors, "notes"))}
+          className={cn(
+            "resize-none rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
+            "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+            "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+            errorMessage(errors, "notes") && "border-red-500",
           )}
         />
-        {identityErrors.notes && (
-          <p className="text-sm text-red-600">{identityErrors.notes.message}</p>
+        {errorMessage(errors, "notes") && (
+          <p className="text-xs text-red-600 dark:text-red-500">
+            {errorMessage(errors, "notes")}
+          </p>
         )}
       </div>
     </div>

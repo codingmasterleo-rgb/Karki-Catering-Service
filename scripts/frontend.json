@@ -85,46 +85,7 @@
     "note": "THIS IS WHERE YOU PASTE YOUR ACTUAL DATA EVERY TIME YOU USE THIS PROMPT. Fill in the fields below, delete the ones you don't need, then send the whole file (or just this INPUT block + the instructions above) to the AI.",
     "component_type": "form ",
     "source_type": "schema",
-    "schema_or_data": "export type OwnerType = 'Person' | 'Company';
-export interface IAddress extends Document {
-  ownerRef: Types.ObjectId;
-  ownerType: OwnerType;
-  label?: 'home' | 'office' | 'warehouse' | 'other';
-  street?: string;
-  city?: string;
-  district?: string;
-  country?: string;
-  isPrimary: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
- 
-const AddressSchema = new Schema<IAddress>(
-  {
-    ownerRef: {
-      type: Schema.Types.ObjectId,
-      required: [true, 'ownerRef is required'],
-      refPath: 'ownerType',
-    },
-    ownerType: {
-      type: String,
-      required: [true, 'ownerType is required'],
-      enum: ['Person', 'Company'],
-    },
-    label: {
-      type: String,
-      enum: ['home', 'office', 'warehouse', 'other'],
-      default: 'office',
-    },
-    street: { type: String, trim: true },
-    city: { type: String, trim: true },
-    district: { type: String, trim: true },
-    country: { type: String, trim: true, default: 'Nepal' },
-    isPrimary: { type: Boolean, default: false },
-  },
-  { timestamps: true }
-);
- ",
+    "schema_or_data": "",
     "page_or_module_context": "<< optional: e.g. 'Employees module, admin-only view' or 'used inside Event detail page' >>",
     "extra_notes": "<< The Form Will Return Something to the Parent Component, So It Should Accept a Callback Function as a Prop to Handle the Form Submission. >>"
   }

@@ -1,12 +1,10 @@
 "use client";
 
-import { useFormContext, Controller } from "react-hook-form";
+import * as React from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { CustomerFormValues } from "../customer/customer";
 
-// Import icons from react-icons
 import {
   FaFacebook,
   FaInstagram,
@@ -17,7 +15,37 @@ import {
   FaWhatsapp,
 } from "react-icons/fa";
 
-type SocialField = keyof CustomerFormValues["socialMediaProfiles"];
+export type SocialMediaProfiles = {
+  facebook?: string;
+  instagram?: string;
+  linkedin?: string;
+  skype?: string;
+  telegram?: string;
+  tiktok?: string;
+  whatsapp?: string;
+};
+
+export type SocialField = keyof SocialMediaProfiles;
+
+export type SocialProfileFormErrors = Partial<
+  Record<SocialField, { message?: string } | string>
+>;
+
+export interface SocialProfileFormProps {
+  value?: SocialMediaProfiles;
+  onChange: (value: SocialMediaProfiles) => void;
+  errors?: SocialProfileFormErrors;
+  disabled?: boolean;
+}
+
+function errorMessage(
+  errors: SocialProfileFormErrors | undefined,
+  key: SocialField,
+): string | undefined {
+  const err = errors?.[key];
+  if (!err) return undefined;
+  return typeof err === "string" ? err : err.message;
+}
 
 const socialFields: {
   name: SocialField;
@@ -34,60 +62,69 @@ const socialFields: {
   { name: "whatsapp", label: "WhatsApp", placeholder: "98XXXXXXXX", icon: FaWhatsapp },
 ];
 
-export function SocialProfileForm() {
-  const {
-    control,
-    formState: { errors, disabled: formDisabled },
-  } = useFormContext<CustomerFormValues>();
-
-  const isSubmitting = Boolean(formDisabled);
-  const sectionErrors = (errors.socialMediaProfiles ?? {}) as Record<
-    string,
-    { message?: string } | undefined
-  >;
+export function SocialProfileForm({
+  value = {},
+  onChange,
+  errors,
+  disabled = false,
+}: SocialProfileFormProps) {
+  const setField = (key: SocialField, rawValue: string) => {
+    const next = { ...value };
+    if (rawValue === "") {
+      delete next[key];
+    } else {
+      next[key] = rawValue;
+    }
+    onChange(next);
+  };
 
   return (
-    <div>
-      {/* Section title */}
-      <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+    <div className="space-y-4">
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         Social Profiles
       </h3>
 
       <div className="grid gap-6 sm:grid-cols-2">
-        {socialFields.map(({ name, label, placeholder, icon: Icon }) => (
-          <div key={name} className="space-y-2">
-            <Label htmlFor={`social-${name}`} className="text-zinc-700 dark:text-zinc-300">
-              {label}
-            </Label>
-            <Controller<CustomerFormValues, `socialMediaProfiles.${SocialField}`>
-              name={`socialMediaProfiles.${name}`}
-              control={control}
-              render={({ field: { value, onChange, onBlur, ref } }) => (
-                <div className="relative">
-                  <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
-                  <Input
-                    id={`social-${name}`}
-                    placeholder={placeholder}
-                    value={value ?? ""}
-                    onChange={onChange}
-                    onBlur={onBlur}
-                    ref={ref}
-                    disabled={isSubmitting}
-                    className={cn(
-                      "rounded-none border-zinc-300 bg-white pl-9 pr-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
-                      "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
-                      "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
-                      sectionErrors[name] && "border-red-500"
-                    )}
-                  />
-                </div>
+        {socialFields.map(({ name, label, placeholder, icon: Icon }) => {
+          const error = errorMessage(errors, name);
+          const inputId = `social-${name}`;
+          const errorId = `social-${name}-error`;
+
+          return (
+            <div key={name} className="space-y-2">
+              <Label
+                htmlFor={inputId}
+                className="text-zinc-700 dark:text-zinc-300"
+              >
+                {label}
+              </Label>
+              <div className="relative">
+                <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+                <Input
+                  id={inputId}
+                  placeholder={placeholder}
+                  value={value[name] ?? ""}
+                  onChange={(e) => setField(name, e.target.value)}
+                  disabled={disabled}
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? errorId : undefined}
+                  autoComplete="off"
+                  className={cn(
+                    "rounded-none border-zinc-300 bg-white pl-9 pr-4 py-3 text-sm transition-colors placeholder:text-zinc-400",
+                    "focus:border-red-500 focus:ring-2 focus:ring-red-500/20",
+                    "dark:border-zinc-700 dark:bg-zinc-900 dark:placeholder:text-zinc-500",
+                    error && "border-red-500",
+                  )}
+                />
+              </div>
+              {error && (
+                <p id={errorId} className="text-sm text-red-600">
+                  {error}
+                </p>
               )}
-            />
-            {sectionErrors[name] && (
-              <p className="text-sm text-red-600">{sectionErrors[name]?.message}</p>
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
