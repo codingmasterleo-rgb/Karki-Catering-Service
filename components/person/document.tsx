@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { ImagePicker } from "../image-picker";
+import { MultipleImagePicker } from "../multiple-image-picker";
 
 export const documentTypeOptions = [
   { value: "citizenship", label: "Citizenship" },
@@ -49,7 +49,7 @@ export type DocumentFormValues = {
   issuedDistrict?: string;
   issuedDate?: Date | string | null;
   expiryDate?: Date | string | null;
-  mediaRefs?: string[];
+  mediaRefs?: (File | string)[];
 };
 
 export type DocumentFormErrors = Partial<
@@ -66,8 +66,6 @@ export interface DocumentFormProps {
   onChange: (value: DocumentFormValues) => void;
   errors?: DocumentFormErrors;
   disabled?: boolean;
-  /** Optional custom file upload handler returning the media ID / URL */
-  onUpload?: (file: File) => Promise<string>;
 }
 
 function errorMessage(
@@ -84,7 +82,6 @@ export function DocumentForm({
   onChange,
   errors,
   disabled = false,
-  onUpload,
 }: DocumentFormProps) {
   const [issuedDateOpen, setIssuedDateOpen] = React.useState(false);
   const [expiryDateOpen, setExpiryDateOpen] = React.useState(false);
@@ -119,11 +116,11 @@ export function DocumentForm({
           Document Details & Verification Files
         </h3>
         <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-          Provide identity numbers, authority credentials, and attached file proof.
+          Provide identification details, issuing credentials, and document scans (e.g. Front & Back).
         </p>
       </div>
 
-      {/* Document type & Document number */}
+      {/* Document Type & Document Number */}
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
           <Label
@@ -193,7 +190,7 @@ export function DocumentForm({
         </div>
       </div>
 
-      {/* Title */}
+      {/* Document Title */}
       <div className="space-y-2">
         <Label
           htmlFor="doc-title"
@@ -221,7 +218,7 @@ export function DocumentForm({
         )}
       </div>
 
-      {/* Description */}
+      {/* Description & Remarks */}
       <div className="space-y-2">
         <Label
           htmlFor="doc-description"
@@ -252,7 +249,7 @@ export function DocumentForm({
         )}
       </div>
 
-      {/* Issued by & Issued district */}
+      {/* Issued by & Issued District */}
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
           <Label
@@ -313,7 +310,7 @@ export function DocumentForm({
         </div>
       </div>
 
-      {/* Issued date & Expiry date */}
+      {/* Issued Date & Expiry Date */}
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
           <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400">
@@ -341,7 +338,10 @@ export function DocumentForm({
                   : "Pick issue date"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto rounded-none border-zinc-200 p-0 dark:border-zinc-800" align="start">
+            <PopoverContent
+              className="w-auto rounded-none border-zinc-200 p-0 dark:border-zinc-800"
+              align="start"
+            >
               <Calendar
                 mode="single"
                 captionLayout="dropdown"
@@ -388,7 +388,10 @@ export function DocumentForm({
                   : "Pick expiry date"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto rounded-none border-zinc-200 p-0 dark:border-zinc-800" align="start">
+            <PopoverContent
+              className="w-auto rounded-none border-zinc-200 p-0 dark:border-zinc-800"
+              align="start"
+            >
               <Calendar
                 mode="single"
                 captionLayout="dropdown"
@@ -409,20 +412,17 @@ export function DocumentForm({
         </div>
       </div>
 
-      {/* Multiple Image Picker for Document Files */}
+      {/* Multiple Image Picker for Document Scans */}
       <div className="pt-2">
-        <ImagePicker
-          multiple={true}
-          maxFiles={10}
-          maxSizeMB={10}
+        <MultipleImagePicker
           label="Attached Verification Scans & Documents"
-          description="Upload certificates, scanned PAN cards, or PDF agreements (up to 10MB each)"
+          description="Select document scans (e.g. Front & Back pages, up to 5MB each)"
           value={value.mediaRefs ?? []}
-          onChange={(urls: string[]) => setField("mediaRefs", urls)}
+          onChange={(files) => setField("mediaRefs", files)}
           error={mediaRefsError}
           disabled={disabled}
-          onUpload={onUpload}
-          idPrefix="doc-media"
+          maxFiles={6}
+          maxSizeMB={5}
         />
       </div>
     </div>

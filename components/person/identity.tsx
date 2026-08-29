@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { format } from "date-fns";
-import { CalendarIcon, User, X } from "lucide-react";
+import { CalendarIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ImagePicker } from "../image-picker";
+import { SingleImagePicker } from "../image-picker";
 
 export type Role = "customer" | "vendor" | "employee";
 const roleOptions: Role[] = ["customer", "vendor", "employee"];
@@ -36,9 +36,10 @@ export type IdentityFormValues = {
   email?: string;
   gender?: Gender;
   dateOfBirth?: Date;
-  avatarUrl?: string;
   roles: Role[];
   notes?: string;
+  avatarUrl?: string;
+  avatar?: File | string | null;
 };
 
 export type IdentityFormErrors = Partial<
@@ -50,7 +51,7 @@ export interface IdentityFormProps {
   onChange: (value: IdentityFormValues) => void;
   errors?: IdentityFormErrors;
   disabled?: boolean;
-  onAvatarUpload?: (file: File) => Promise<string>;
+  onAvatarChange?: (file: File | null) => void;
 }
 
 function errorMessage(
@@ -67,7 +68,7 @@ export function IdentityForm({
   onChange,
   errors,
   disabled = false,
-  onAvatarUpload,
+  onAvatarChange,
 }: IdentityFormProps) {
   const [calendarOpen, setCalendarOpen] = React.useState(false);
 
@@ -78,62 +79,34 @@ export function IdentityForm({
     onChange({ ...value, [key]: fieldValue });
   };
 
-  const avatarError = errorMessage(errors, "avatarUrl");
+  const handleAvatarChange = (file: File | null) => {
+    if (onAvatarChange) {
+      onAvatarChange(file);
+    }
+    onChange({
+      ...value,
+      avatar: file,
+      avatarUrl: file ? URL.createObjectURL(file) : "",
+    });
+  };
+
+  const avatarError =
+    errorMessage(errors, "avatarUrl") || errorMessage(errors, "avatar");
 
   return (
     <div className="space-y-6">
-      {/* Avatar Section with Live Preview */}
-      <div className="space-y-3">
-        <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400">
-          Profile Photo & Avatar
-        </Label>
+      {/* Profile Photo / Avatar Picker */}
+      <SingleImagePicker
+        label="Profile Photo & Avatar"
+        description="JPG, PNG, or WEBP up to 5MB"
+        value={value.avatar ?? value.avatarUrl ?? null}
+        onChange={handleAvatarChange}
+        error={avatarError}
+        disabled={disabled}
+        maxSizeMB={5}
+      />
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          {/* Sharp Avatar Preview Frame */}
-          <div className="group relative flex h-24 w-24 shrink-0 items-center justify-center rounded-none border-2 border-zinc-200 bg-zinc-100 p-0.5 shadow-sm transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:border-zinc-700">
-            {value.avatarUrl ? (
-              <>
-                <img
-                  src={value.avatarUrl}
-                  alt={value.fullName || "User Avatar Preview"}
-                  className="h-full w-full rounded-none object-cover"
-                />
-                {!disabled && (
-                  <button
-                    type="button"
-                    onClick={() => setField("avatarUrl", "")}
-                    aria-label="Remove profile photo"
-                    className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-none border border-red-200 bg-red-600 text-white opacity-90 shadow-sm transition-all hover:bg-red-700 hover:opacity-100 dark:border-red-900"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-1 text-zinc-400 dark:text-zinc-600">
-                <User className="h-8 w-8 stroke-[1.5]" />
-                <span className="text-[9px] font-bold uppercase tracking-wider">No Photo</span>
-              </div>
-            )}
-          </div>
-
-          {/* Integrated Image Picker Upload Area */}
-          <div className="flex-1">
-            <ImagePicker
-              multiple={false}
-              description="JPG, PNG, or WEBP up to 5MB"
-              value={value.avatarUrl ?? ""}
-              onChange={(url: string) => setField("avatarUrl", url)}
-              error={avatarError}
-              disabled={disabled}
-              onUpload={onAvatarUpload}
-              idPrefix="identity-avatar"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Full name & Phone */}
+      {/* Full Name & Phone */}
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
           <Label
@@ -222,7 +195,7 @@ export function IdentityForm({
         )}
       </div>
 
-      {/* Gender & Date of birth */}
+      {/* Gender & Date of Birth */}
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
           <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400">
@@ -281,7 +254,10 @@ export function IdentityForm({
                   : "Pick a date"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto rounded-none p-0 border-zinc-200 dark:border-zinc-800" align="start">
+            <PopoverContent
+              className="w-auto rounded-none border-zinc-200 p-0 dark:border-zinc-800"
+              align="start"
+            >
               <Calendar
                 mode="single"
                 captionLayout="dropdown"
