@@ -111,13 +111,32 @@ export function DocumentForm({
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-zinc-200 pb-3 dark:border-zinc-800">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
-          Document Details & Verification Files
-        </h3>
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-          Provide identification details, issuing credentials, and document scans (e.g. Front & Back).
-        </p>
+      {/* Document Title */}
+      <div className="space-y-2">
+        <Label
+          htmlFor="doc-title"
+          className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+        >
+          Document Title / Caption
+        </Label>
+        <Input
+          id="doc-title"
+          placeholder="e.g. Citizenship Certificate (Front & Back)"
+          maxLength={200}
+          value={value.title ?? ""}
+          onChange={(e) => setField("title", e.target.value)}
+          disabled={disabled}
+          aria-invalid={Boolean(titleError)}
+          className={cn(
+            "h-11 rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
+            "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+            "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+            titleError && "border-red-500",
+          )}
+        />
+        {titleError && (
+          <p className="text-xs text-red-600 dark:text-red-500">{titleError}</p>
+        )}
       </div>
 
       {/* Document Type & Document Number */}
@@ -127,7 +146,8 @@ export function DocumentForm({
             htmlFor="doc-documentType"
             className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
           >
-            Document type <span className="text-red-600 dark:text-red-500">*</span>
+            Document type{" "}
+            <span className="text-red-600 dark:text-red-500">*</span>
           </Label>
           <Select
             value={value.documentType ?? ""}
@@ -166,13 +186,16 @@ export function DocumentForm({
             htmlFor="doc-documentNumber"
             className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
           >
-            Document number <span className="text-red-600 dark:text-red-500">*</span>
+            Document number{" "}
+            <span className="text-red-600 dark:text-red-500">*</span>
           </Label>
           <Input
             id="doc-documentNumber"
             placeholder="e.g. 12-34-56789"
             value={value.documentNumber ?? ""}
-            onChange={(e) => setField("documentNumber", e.target.value.toUpperCase())}
+            onChange={(e) =>
+              setField("documentNumber", e.target.value.toUpperCase())
+            }
             disabled={disabled}
             aria-invalid={Boolean(documentNumberError)}
             className={cn(
@@ -188,65 +211,6 @@ export function DocumentForm({
             </p>
           )}
         </div>
-      </div>
-
-      {/* Document Title */}
-      <div className="space-y-2">
-        <Label
-          htmlFor="doc-title"
-          className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
-        >
-          Document Title / Caption
-        </Label>
-        <Input
-          id="doc-title"
-          placeholder="e.g. Citizenship Certificate (Front & Back)"
-          maxLength={200}
-          value={value.title ?? ""}
-          onChange={(e) => setField("title", e.target.value)}
-          disabled={disabled}
-          aria-invalid={Boolean(titleError)}
-          className={cn(
-            "h-11 rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
-            "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
-            "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
-            titleError && "border-red-500",
-          )}
-        />
-        {titleError && (
-          <p className="text-xs text-red-600 dark:text-red-500">{titleError}</p>
-        )}
-      </div>
-
-      {/* Description & Remarks */}
-      <div className="space-y-2">
-        <Label
-          htmlFor="doc-description"
-          className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
-        >
-          Description & Remarks
-        </Label>
-        <Textarea
-          id="doc-description"
-          placeholder="Any additional notes or legal stipulations regarding this certificate..."
-          rows={3}
-          maxLength={2000}
-          value={value.description ?? ""}
-          onChange={(e) => setField("description", e.target.value)}
-          disabled={disabled}
-          aria-invalid={Boolean(descriptionError)}
-          className={cn(
-            "resize-none rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
-            "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
-            "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
-            descriptionError && "border-red-500",
-          )}
-        />
-        {descriptionError && (
-          <p className="text-xs text-red-600 dark:text-red-500">
-            {descriptionError}
-          </p>
-        )}
       </div>
 
       {/* Issued by & Issued District */}
@@ -317,7 +281,7 @@ export function DocumentForm({
             Issued date
           </Label>
           <Popover open={issuedDateOpen} onOpenChange={setIssuedDateOpen}>
-            <PopoverTrigger>
+            <PopoverTrigger className={"w-full"}>
               <Button
                 type="button"
                 variant="outline"
@@ -367,7 +331,7 @@ export function DocumentForm({
             Expiry date
           </Label>
           <Popover open={expiryDateOpen} onOpenChange={setExpiryDateOpen}>
-            <PopoverTrigger>
+            <PopoverTrigger className={"w-full"}>
               <Button
                 type="button"
                 variant="outline"
@@ -424,6 +388,37 @@ export function DocumentForm({
           maxFiles={6}
           maxSizeMB={5}
         />
+      </div>
+
+      {/* Description & Remarks */}
+      <div className="space-y-2">
+        <Label
+          htmlFor="doc-description"
+          className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-400"
+        >
+          Description & Remarks
+        </Label>
+        <Textarea
+          id="doc-description"
+          placeholder="Any additional notes or legal stipulations regarding this certificate..."
+          rows={3}
+          maxLength={2000}
+          value={value.description ?? ""}
+          onChange={(e) => setField("description", e.target.value)}
+          disabled={disabled}
+          aria-invalid={Boolean(descriptionError)}
+          className={cn(
+            "resize-none rounded-none border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 transition-colors placeholder:text-zinc-400",
+            "focus-visible:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500/20",
+            "dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:placeholder:text-zinc-600",
+            descriptionError && "border-red-500",
+          )}
+        />
+        {descriptionError && (
+          <p className="text-xs text-red-600 dark:text-red-500">
+            {descriptionError}
+          </p>
+        )}
       </div>
     </div>
   );

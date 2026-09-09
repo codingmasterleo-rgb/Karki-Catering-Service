@@ -32,35 +32,34 @@ export function SingleImagePicker({
 }: SingleImagePickerProps) {
   const [isDragging, setIsDragging] = React.useState(false);
   const [localError, setLocalError] = React.useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
-  // Compute preview URL and handle cleanup for File objects
-  const previewUrl = React.useMemo(() => {
-    if (!value) return null;
-    if (typeof value === "string") return value;
-    console.log(value)
-    return URL.createObjectURL(value);
-  }, [value]);
-
   React.useEffect(() => {
+    if (!value) {
+      setPreviewUrl(null);
+      return;
+    }
+    if (typeof value === "string") {
+      setPreviewUrl(value);
+      return;
+    }
+    const url = URL.createObjectURL(value);
+    setPreviewUrl(url);
     return () => {
-      if (previewUrl && previewUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(previewUrl);
-      }
+      URL.revokeObjectURL(url);
     };
-  }, [previewUrl]);
+  }, [value]);
 
   const handleSelectFile = (file: File) => {
     setLocalError(null);
-
     if (file.size > maxSizeMB * 1024 * 1024) {
       setLocalError(`File size exceeds the ${maxSizeMB}MB limit.`);
       return;
     }
-
     onChange(file);
   };
-// console.log(value)
+
   const handleRemove = () => {
     if (disabled) return;
     setLocalError(null);
@@ -71,17 +70,16 @@ export function SingleImagePicker({
   const displayError = error || localError;
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn("space-y-2 h-full", className)}>
       {label && (
         <Label
           htmlFor={`${idPrefix}-input`}
-          className="text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-300"
+          className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
         >
           {label}
         </Label>
       )}
 
-      {/* Hidden File Input */}
       <input
         ref={inputRef}
         id={`${idPrefix}-input`}
@@ -96,29 +94,34 @@ export function SingleImagePicker({
         className="sr-only"
       />
 
-      {/* Preview View */}
       {previewUrl ? (
-        <div className="group relative h-40 w-full max-w-xs overflow-hidden border-2 border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="group relative h-44 w-full overflow-hidden border-2 border-zinc-200 bg-zinc-100 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700">
           <img
             src={previewUrl}
             alt="Preview"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
-          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 backdrop-blur-[2px] transition-all duration-300 group-hover:opacity-100">
             <button
               type="button"
-              onClick={() => inputRef.current?.click()}
+              onClick={(e) => {
+                e.stopPropagation();
+                inputRef.current?.click();
+              }}
               disabled={disabled}
-              className="flex items-center gap-1.5 border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              className="flex items-center gap-1.5 border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 shadow-lg transition-all hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
             >
               <Upload className="h-3.5 w-3.5" />
               Replace
             </button>
             <button
               type="button"
-              onClick={handleRemove}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRemove();
+              }}
               disabled={disabled}
-              className="flex items-center gap-1.5 border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 shadow-sm transition hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900"
+              className="flex items-center gap-1.5 border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 shadow-lg transition-all hover:bg-red-100 disabled:opacity-50 dark:border-red-900/60 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900"
             >
               <X className="h-3.5 w-3.5" />
               Remove
@@ -126,7 +129,6 @@ export function SingleImagePicker({
           </div>
         </div>
       ) : (
-        /* Empty / Select Dropzone */
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -153,30 +155,36 @@ export function SingleImagePicker({
             }
           }}
           className={cn(
-            "flex cursor-pointer flex-col items-center justify-center border-2 border-dashed p-6 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600",
-            "border-zinc-300 bg-zinc-50/50 hover:border-zinc-400 hover:bg-zinc-100/50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50",
-            isDragging && "border-red-600 bg-red-50/50 dark:border-red-500 dark:bg-red-950/20",
-            disabled && "cursor-not-allowed border-zinc-200 opacity-50 dark:border-zinc-800",
-            displayError && "border-red-500/80 bg-red-50/30 dark:border-red-500/60 dark:bg-red-950/10"
+            "flex h-44 w-full cursor-pointer flex-col items-center justify-center border-2 border-dashed p-4 text-center transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950",
+            "border-zinc-300 bg-zinc-50/50 hover:border-zinc-400 hover:bg-zinc-100/80 dark:border-zinc-800 dark:bg-zinc-950/50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/80",
+            isDragging && "border-red-500 bg-red-50/80 ring-2 ring-red-500/20 dark:border-red-500 dark:bg-red-950/30",
+            disabled && "cursor-not-allowed border-zinc-200 bg-zinc-100/50 opacity-60 dark:border-zinc-800",
+            displayError && "border-red-400 bg-red-50/60 dark:border-red-500/60 dark:bg-red-950/20"
           )}
         >
-          <div className="flex h-9 w-9 items-center justify-center border border-zinc-200 bg-white text-zinc-500 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-            <ImageIcon className="h-4 w-4" />
+          <div
+            className={cn(
+              "flex h-10 w-10 items-center justify-center border bg-white shadow-sm transition-colors dark:bg-zinc-900",
+              isDragging
+                ? "border-red-200 text-red-500 dark:border-red-800 dark:text-red-400"
+                : "border-zinc-200 text-zinc-400 dark:border-zinc-800 dark:text-zinc-500"
+            )}
+          >
+            <ImageIcon className="h-5 w-5" />
           </div>
-          <p className="mt-2 text-xs font-bold text-zinc-800 dark:text-zinc-200">
-            Click to select <span className="font-normal text-zinc-500 dark:text-zinc-400">or drag & drop</span>
+          <p className="mt-3 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+            Click or drag
           </p>
           <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-            {description || `Image file up to ${maxSizeMB}MB`}
+            {description || `Up to ${maxSizeMB}MB`}
           </p>
         </div>
       )}
 
-      {/* Validation Error */}
       {displayError && (
-        <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-500">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-          <span>{displayError}</span>
+        <div className="flex items-start gap-2 border border-red-200 bg-red-50 p-2 text-xs text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="leading-relaxed">{displayError}</span>
         </div>
       )}
     </div>
